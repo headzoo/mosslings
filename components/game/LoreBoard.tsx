@@ -314,20 +314,42 @@ export function LoreBoard({ flash }: { flash: NewsFlash | null }) {
   );
 }
 
+const extinctionNote = {
+  text: "No Mosslings remain. Three small graves mark the ground, sticks crossed where the earth was opened and closed again.",
+  image: "/mosslings/lore/graves.png",
+  alt: "Three makeshift graves of freshly replaced earth, each marked at one end with a cross of sticks.",
+};
+
+export function ExtinctionModal({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  if (!open) return null;
+  return createPortal(
+    <LoreDialog note={extinctionNote} showFooter={false} onClose={onClose} />,
+    document.body,
+  );
+}
+
 function LoreDialog({
   note,
   title,
-  alert,
-  canAdvance,
+  alert = false,
+  canAdvance = false,
   onNext,
   onClose,
+  showFooter = true,
 }: {
   note: { text: string; image: string; alt: string };
-  title: string;
-  alert: boolean;
-  canAdvance: boolean;
-  onNext: () => void;
+  title?: string;
+  alert?: boolean;
+  canAdvance?: boolean;
+  onNext?: () => void;
   onClose: () => void;
+  showFooter?: boolean;
 }) {
   const onCloseRef = useRef(onClose);
   const dialogRef = useRef<HTMLDialogElement | null>(null);
@@ -350,7 +372,7 @@ function LoreDialog({
       <button
         type="button"
         className="lore-modal-close"
-        aria-label="Close story"
+        aria-label={showFooter ? "Close story" : "Close"}
         onClick={(event) => event.currentTarget.closest("dialog")?.close()}
       >
         ×
@@ -362,21 +384,23 @@ function LoreDialog({
         height={720}
         sizes="(max-width: 640px) 92vw, 560px"
       />
-      <p>{note.text}</p>
-      <footer className="lore-modal-footer">
-        <p id="lore-modal-title">
-          {alert ? <NewsMark /> : null}
-          {title}
-        </p>
-        <button
-          type="button"
-          className="lore-next"
-          onClick={onNext}
-          disabled={!canAdvance}
-        >
-          Next story
-        </button>
-      </footer>
+      <p id={showFooter ? undefined : "lore-modal-title"}>{note.text}</p>
+      {showFooter ? (
+        <footer className="lore-modal-footer">
+          <p id="lore-modal-title">
+            {alert ? <NewsMark /> : null}
+            {title}
+          </p>
+          <button
+            type="button"
+            className="lore-next"
+            onClick={onNext}
+            disabled={!canAdvance}
+          >
+            Next story
+          </button>
+        </footer>
+      ) : null}
     </dialog>
   );
 }

@@ -37,7 +37,12 @@ import { GameMap, Minimap } from "./GameMap";
 import { GodControls } from "./GodControls";
 import { GodEffects } from "./GodEffects";
 import { Health } from "./Health";
-import { LoreBoard, NEWS_MS, type NewsFlash } from "./LoreBoard";
+import {
+  ExtinctionModal,
+  LoreBoard,
+  NEWS_MS,
+  type NewsFlash,
+} from "./LoreBoard";
 import { type IntroPhase, MosslingIntro } from "./MosslingIntro";
 import { Pollinators } from "./Pollinators";
 import { SkyClouds } from "./SkyClouds";
@@ -144,6 +149,8 @@ export function GameScreen({
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const [tileSize, setTileSize] = useState(DEFAULT_TILE_SIZE);
   const [center, setCenter] = useState(DEFAULT_CENTER);
+  const [moveMode, setMoveMode] = useState(false);
+  const [panning, setPanning] = useState(false);
   const cameraAnim = useRef<number | null>(null);
   const cameraState = useRef({
     center: DEFAULT_CENTER,
@@ -152,6 +159,9 @@ export function GameScreen({
   cameraState.current = { center, tileSize };
   const [selection, setSelection] = useState<TileSelection | null>(null);
   const [flash, setFlash] = useState<NewsFlash | null>(null);
+  const [extinctionOpen, setExtinctionOpen] = useState(false);
+  const extinctionShown = useRef(false);
+  const previousMosslings = useRef<number | null>(null);
   const flashId = useRef(0);
   const advisoryMemory = useRef<AdvisoryMemory>(EMPTY_ADVISORY_MEMORY);
   const newsUntil = useRef(0);
@@ -178,6 +188,22 @@ export function GameScreen({
       setFlash({ id: ++flashId.current, kind: step.kind });
     }
   }, [map, mosslings, resources, events]);
+  useEffect(() => {
+    const count = resources?.mosslings;
+    if (count == null) return;
+    const previous = previousMosslings.current;
+    previousMosslings.current = count;
+    if (
+      extinctionShown.current ||
+      previous == null ||
+      previous <= 0 ||
+      count !== 0
+    ) {
+      return;
+    }
+    extinctionShown.current = true;
+    setExtinctionOpen(true);
+  }, [resources]);
   const stroke = useRef<{
     painting: boolean;
     moved: boolean;
@@ -186,6 +212,14 @@ export function GameScreen({
     lastIndex: number | null;
     announced: boolean;
     stopped: boolean;
+  } | null>(null);
+  const pan = useRef<{
+    x: number;
+    y: number;
+    focusX: number;
+    focusY: number;
+    viewWidth: number;
+    viewHeight: number;
   } | null>(null);
   const attachBoard = useCallback(
     (node: HTMLDivElement | null) => {
@@ -202,6 +236,33 @@ export function GameScreen({
     },
     [tutorialPaused],
   );
+  const stopPan = () => {
+    pan.current = null;
+    setPanning(false);
+  };
+  useEffect(() => {
+    if (tutorialPaused || tileSize <= DEFAULT_TILE_SIZE) {
+      setMoveMode(false);
+      stopPan();
+    }
+  }, [tutorialPaused, tileSize]);
+  useEffect(() => {
+    if (!moveMode) return;
+    const exit = (event: PointerEvent) => {
+      const board = viewportRef.current;
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        board?.contains(target) &&
+        !(target instanceof Element && target.closest("dialog"))
+      )
+        return;
+      setMoveMode(false);
+      stopPan();
+    };
+    window.addEventListener("pointerdown", exit);
+    return () => window.removeEventListener("pointerdown", exit);
+  }, [moveMode]);
   useEffect(() => {
     if (!map) return;
     const introZoomed =
@@ -503,9 +564,15 @@ export function GameScreen({
               type="button"
               className="camera-surface"
               data-targeting={!!power || !!mosslingTarget}
-              aria-label="Map camera: click a tile to inspect, use plus and minus to zoom"
+              data-move={moveMode}
+              data-panning={panning}
+              aria-label={
+                moveMode
+                  ? "Map camera: drag to move the map"
+                  : "Map camera: click a tile to inspect, use plus and minus to zoom"
+              }
               onClick={(event) => {
-                if (tutorialPaused) return;
+                if (tutorialPaused || moveMode) return;
                 if (event.detail === 0 && viewportRef.current) {
                   const rect = viewportRef.current.getBoundingClientRect();
                   selectAt(
@@ -568,6 +635,18 @@ export function GameScreen({
                 if (tutorialPaused || !map || !camera || event.button !== 0)
                   return;
                 event.currentTarget.setPointerCapture(event.pointerId);
+                if (moveMode) {
+                  pan.current = {
+                    x: event.clientX,
+                    y: event.clientY,
+                    focusX: camera.x + camera.width / 2,
+                    focusY: camera.y + camera.height / 2,
+                    viewWidth: camera.width,
+                    viewHeight: camera.height,
+                  };
+                  setPanning(true);
+                  return;
+                }
                 const tile = tileAt(event.clientX, event.clientY);
                 stroke.current = {
                   painting: !!power,
@@ -582,6 +661,22 @@ export function GameScreen({
                   stroke.current.stopped = placePower(tile.x, tile.y, false);
               }}
               onPointerMove={(event) => {
+                const drag = pan.current;
+                if (drag && map) {
+                  const focusX =
+                    drag.focusX - (event.clientX - drag.x) / tileSize;
+                  const focusY =
+                    drag.focusY - (event.clientY - drag.y) / tileSize;
+                  const minX = drag.viewWidth / 2;
+                  const maxX = map.width - drag.viewWidth / 2;
+                  const minY = drag.viewHeight / 2;
+                  const maxY = map.height - drag.viewHeight / 2;
+                  setCenter({
+                    x: Math.max(minX, Math.min(maxX, focusX)) / map.width,
+                    y: Math.max(minY, Math.min(maxY, focusY)) / map.height,
+                  });
+                  return;
+                }
                 if (!stroke.current) return;
                 if (
                   !stroke.current.moved &&
@@ -606,6 +701,10 @@ export function GameScreen({
                 stroke.current.stopped = placePower(tile.x, tile.y, true);
               }}
               onPointerUp={(event) => {
+                if (pan.current) {
+                  stopPan();
+                  return;
+                }
                 if (
                   stroke.current &&
                   !stroke.current.painting &&
@@ -616,9 +715,11 @@ export function GameScreen({
               }}
               onPointerCancel={() => {
                 stroke.current = null;
+                stopPan();
               }}
               onLostPointerCapture={() => {
                 stroke.current = null;
+                stopPan();
               }}
             >
               <span className="sr-only">Map camera</span>
@@ -785,6 +886,11 @@ export function GameScreen({
             <ZoomControls
               tileSize={tileSize}
               ready={!!map && !tutorialPaused}
+              moveMode={moveMode}
+              onToggleMove={() => {
+                if (tileSize <= DEFAULT_TILE_SIZE) return;
+                setMoveMode((on) => !on);
+              }}
               onZoom={zoom}
             />
             {selected && (
@@ -837,6 +943,10 @@ export function GameScreen({
             )}
           </div>
           <LoreBoard flash={flash} />
+          <ExtinctionModal
+            open={extinctionOpen}
+            onClose={() => setExtinctionOpen(false)}
+          />
         </section>
         <aside className="world-sidebar">
           <SpeciesList
