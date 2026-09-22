@@ -18,11 +18,10 @@ body {
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family:
-    ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas,
-    "DejaVu Sans Mono", monospace;
+  font-family: var(--font-dotgothic), sans-serif;
   font-size: 16px;
-  -webkit-font-smoothing: auto;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
 }
 button {
   font: inherit;
@@ -70,17 +69,16 @@ button:hover {
   display: block;
   width: auto;
   max-width: 302px;
-  max-height: 95px;
+  max-height: 108px;
   height: auto;
 }
 .health {
-  --health-stat-width: 7.5rem;
   margin: 0;
   min-height: var(--header-panel-min-height);
   width: max-content;
   max-width: 100%;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: flex-start;
   gap: 18px;
   padding: 8px 14px;
@@ -93,18 +91,13 @@ button:hover {
 }
 .health-stat {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 2px;
-  flex: 0 0 var(--health-stat-width);
-  width: var(--health-stat-width);
-  min-width: 0;
-}
-.health-stat-head {
-  display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   min-width: 0;
+}
+.health-stat .pixel-icon {
+  width: 32px;
+  height: 32px;
 }
 .health-stat-text {
   display: flex;
@@ -123,42 +116,6 @@ button:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.resource-swatch {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--swatch);
-  flex-shrink: 0;
-  box-shadow:
-    inset 2px 2px 0 #ffffff12,
-    inset -2px -2px 0 #00000015;
-}
-.health-mosslings {
-  --swatch: #ffe023;
-}
-.health-food {
-  --swatch: #299c30;
-}
-.health-born {
-  --swatch: #9cd67a;
-}
-.health-died {
-  --swatch: #8a7a7a;
-}
-.health-destroyed {
-  --swatch: #8b5a3c;
-}
-.health-vital {
-  --swatch: #56b4c8;
-}
-.sparkline {
-  display: block;
-  width: 100%;
-  opacity: 0.85;
-}
-.sparkline--empty {
-  opacity: 0.25;
 }
 .year {
   display: flex;
@@ -425,7 +382,7 @@ button:hover {
 }
 .lore-note p {
   margin: 0;
-  font-size: 15px;
+  font-size: 19.5px;
   line-height: 1.35;
 }
 @keyframes lore-fade {
@@ -588,9 +545,8 @@ button:hover {
   width: 32px;
   height: 32px;
   flex: none;
-  border-radius: 50%;
   image-rendering: pixelated;
-  background: #102018;
+  background: transparent;
 }
 .species-list button span {
   font-size: 16px;
@@ -618,11 +574,12 @@ button:hover {
   z-index: 1;
   pointer-events: none;
 }
-.species-highlight {
+.mossling-outline {
   position: absolute;
-  box-shadow:
-    inset 0 0 0 1px #ffe128,
-    0 0 0 1px #1a1400;
+  box-shadow: 0 0 0 1px #1a1400;
+}
+.mossling-outline--tint {
+  background: rgb(255 225 40 / 42%);
 }
 .minimap {
   padding: 13px;
@@ -682,16 +639,15 @@ button:hover {
     gap: 8px;
   }
   .health {
-    --health-stat-width: 6.5rem;
     gap: 12px;
     padding: 9px;
   }
-  .health-stat-head {
+  .health-stat {
     gap: 6px;
   }
-  .resource-swatch {
-    width: 22px;
-    height: 22px;
+  .health-stat .pixel-icon {
+    width: 26px;
+    height: 26px;
   }
   .health dt {
     font-size: 12px;
@@ -737,7 +693,7 @@ button:hover {
     height: 28px;
   }
   .lore-note p {
-    font-size: 13px;
+    font-size: 16.9px;
   }
   .god-button {
     gap: 2px;
@@ -838,24 +794,23 @@ button:hover {
     height: 24px;
   }
   .health {
-    --health-stat-width: 5.5rem;
     grid-column: 1 / 3;
     grid-row: 2;
     padding: 5px 7px;
     gap: 8px;
   }
-  .health-stat-head {
+  .health-stat {
     gap: 4px;
+  }
+  .health-stat .pixel-icon {
+    width: 22px;
+    height: 22px;
   }
   .health dt {
     font-size: 10px;
   }
   .health dd {
     font-size: calc(14px * 0.85);
-  }
-  .resource-swatch {
-    width: 18px;
-    height: 18px;
   }
   .play-controls {
     grid-column: 1 / 3;
@@ -927,7 +882,7 @@ button:hover {
   .brand-logo {
     width: auto;
     max-width: 100%;
-    max-height: 66px;
+    max-height: 75px;
   }
   .god-button {
     flex-direction: row;
@@ -1077,6 +1032,11 @@ button:hover {
   top: 0;
   background: #0b161c;
   z-index: 1;
+  cursor: grab;
+  touch-action: none;
+}
+.inspector-header:active {
+  cursor: grabbing;
 }
 .inspector-eyebrow {
   color: #9dab9f;
@@ -1092,13 +1052,39 @@ button:hover {
   color: #9dab9f;
   font-size: 12px;
 }
-.inspector-header button {
+.inspector-header button.inspector-close {
+  display: grid;
+  place-items: center;
   border: 1px solid var(--border);
-  font-size: 24px;
   width: 34px;
   height: 34px;
+  padding: 0;
   flex-shrink: 0;
   cursor: pointer;
+}
+.inspector-close-mark {
+  position: relative;
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+.inspector-close-mark::before,
+.inspector-close-mark::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 14px;
+  height: 2px;
+  margin-top: -1px;
+  margin-left: -7px;
+  background: currentColor;
+}
+.inspector-close-mark::before {
+  transform: rotate(45deg);
+}
+.inspector-close-mark::after {
+  transform: rotate(-45deg);
 }
 .inspector-content {
   padding: 0 18px 18px;
@@ -1383,6 +1369,8 @@ button:hover {
   color: #35412c;
   box-shadow: 0 24px 100px #0009;
   font-family: Georgia, "Times New Roman", serif;
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
   overscroll-behavior: contain;
 }
 .welcome-splash[open] {
@@ -1569,6 +1557,8 @@ button:hover {
   color: #35412c;
   box-shadow: 0 24px 100px #0009;
   font-family: Georgia, "Times New Roman", serif;
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
 }
 .help-modal[open] {
   display: flex;
@@ -1792,6 +1782,8 @@ button:hover {
   color: #35412c;
   box-shadow: 0 12px 40px #0006;
   font-family: Georgia, "Times New Roman", serif;
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
   transform: translateY(-50%);
 }
 .mossling-intro-copy--mosslings {

@@ -37,9 +37,9 @@ const terrainInfo = {
   },
 };
 const cropInfo = {
-  title: "Crops",
+  title: "Carrots",
   description:
-    "A sown patch. It starts as plain green. Orange dots appear as it grows, and a ripe field stands in rows. Without rain the crop withers. Without sun it simply waits.",
+    "A carrot patch, full of a Mossling's favorite food. Small green tops poke up first, then orange roots swell beneath them. With rain and sun, the rows grow into a feast.",
 };
 export function TileInspector({
   seed,
@@ -70,6 +70,13 @@ export function TileInspector({
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const dragOffsetRef = useRef({ dx: 0, dy: 0 });
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    originDx: number;
+    originDy: number;
+  } | null>(null);
   const crop = cell.growth !== undefined && !cell.tree;
   const info = cell.tree
     ? {
@@ -96,8 +103,9 @@ export function TileInspector({
     if (!dialog || !host) return;
     const position = () => {
       const rect = host.getBoundingClientRect();
-      dialog.style.left = `${rect.left + rect.width / 2}px`;
-      dialog.style.top = `${rect.top + rect.height / 2}px`;
+      const { dx, dy } = dragOffsetRef.current;
+      dialog.style.left = `${rect.left + rect.width / 2 + dx}px`;
+      dialog.style.top = `${rect.top + rect.height / 2 + dy}px`;
       dialog.style.width = `${Math.max(0, Math.min(420, rect.width - 16))}px`;
       dialog.style.maxHeight = `${Math.max(0, rect.height - 16)}px`;
     };
@@ -113,6 +121,40 @@ export function TileInspector({
       dialog.close();
     };
   }, [hostRef]);
+  const handleHeaderPointerDown = (event: React.PointerEvent<HTMLElement>) => {
+    if (event.button !== 0) return;
+    const target = event.target;
+    if (target instanceof Element && target.closest("button")) return;
+    dragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      originDx: dragOffsetRef.current.dx,
+      originDy: dragOffsetRef.current.dy,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const handleHeaderPointerMove = (event: React.PointerEvent<HTMLElement>) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    dragOffsetRef.current = {
+      dx: drag.originDx + event.clientX - drag.startX,
+      dy: drag.originDy + event.clientY - drag.startY,
+    };
+    const dialog = dialogRef.current;
+    const host = hostRef.current;
+    if (!dialog || !host) return;
+    const rect = host.getBoundingClientRect();
+    const { dx, dy } = dragOffsetRef.current;
+    dialog.style.left = `${rect.left + rect.width / 2 + dx}px`;
+    dialog.style.top = `${rect.top + rect.height / 2 + dy}px`;
+  };
+  const handleHeaderPointerEnd = (event: React.PointerEvent<HTMLElement>) => {
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
   return (
     <dialog
       ref={dialogRef}
@@ -121,8 +163,19 @@ export function TileInspector({
       onClose={() => {
         if (!dialogRef.current?.open) onClose();
       }}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          dialogRef.current?.close();
+        }
+      }}
     >
-      <header className="inspector-header">
+      <header
+        className="inspector-header"
+        onPointerDown={handleHeaderPointerDown}
+        onPointerMove={handleHeaderPointerMove}
+        onPointerUp={handleHeaderPointerEnd}
+        onPointerCancel={handleHeaderPointerEnd}
+      >
         <div>
           <p className="inspector-eyebrow">
             {mossling ? "Meet a Mossling" : "A little patch of world"}
@@ -135,10 +188,11 @@ export function TileInspector({
         <button
           ref={closeRef}
           type="button"
+          className="inspector-close"
           aria-label="Close tile information"
           onClick={onClose}
         >
-          ×
+          <span className="inspector-close-mark" aria-hidden="true" />
         </button>
       </header>
       <div className="inspector-content">
@@ -158,7 +212,7 @@ export function TileInspector({
               )}
               {crop && (
                 <p className="tile-coordinate">
-                  Crops:{" "}
+                  Carrots:{" "}
                   {(cell.growth ?? 0) >= 1
                     ? "ripe"
                     : (cell.growth ?? 0) <= 0
@@ -229,7 +283,7 @@ export function TileInspector({
             )}
             {crop && (
               <p className="tile-coordinate">
-                Crops:{" "}
+                Carrots:{" "}
                 {(cell.growth ?? 0) >= 1
                   ? "ripe"
                   : (cell.growth ?? 0) <= 0

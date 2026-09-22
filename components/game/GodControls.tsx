@@ -1,6 +1,6 @@
 import type { Ref } from "react";
 import type { PowerId } from "@/lib/god/types";
-import { type IconName, PixelIcon } from "./PixelIcon";
+import { HudIcon } from "./HudIcon";
 
 type ControlsProps = {
   selected: PowerId | null;
@@ -14,7 +14,7 @@ function GodButton({
   selected,
   onSelect,
   disabled,
-}: ControlsProps & { name: string; icon: IconName; power: PowerId }) {
+}: ControlsProps & { name: string; icon: string; power: PowerId }) {
   return (
     <button
       type="button"
@@ -24,39 +24,100 @@ function GodButton({
       title={`Place ${name}`}
       onClick={() => onSelect(power)}
     >
-      <PixelIcon name={icon} />
+      <HudIcon src={icon} />
       <span>{name}</span>
     </button>
   );
 }
 export function GodRain(props: ControlsProps) {
-  return <GodButton {...props} name="Rain" icon="rain" power="rain" />;
+  return (
+    <GodButton
+      {...props}
+      name="Rain"
+      icon="/mosslings/icons/rain.png"
+      power="rain"
+    />
+  );
 }
 export function GodSun(props: ControlsProps) {
-  return <GodButton {...props} name="Sun" icon="sun" power="sun" />;
+  return (
+    <GodButton
+      {...props}
+      name="Sun"
+      icon="/mosslings/icons/sun.png"
+      power="sun"
+    />
+  );
 }
 export function GodRaze(props: ControlsProps) {
-  return <GodButton {...props} name="Crops" icon="carrot" power="raze" />;
+  return (
+    <GodButton
+      {...props}
+      name="Carrots"
+      icon="/mosslings/icons/carrot.png"
+      power="raze"
+    />
+  );
 }
 export function GodDisease(props: ControlsProps) {
-  return <GodButton {...props} name="Disease" icon="virus" power="disease" />;
+  return (
+    <GodButton
+      {...props}
+      name="Disease"
+      icon="/mosslings/icons/virus.png"
+      power="disease"
+    />
+  );
 }
 export function GodFire(props: ControlsProps) {
-  return <GodButton {...props} name="Fire" icon="fire" power="fire" />;
+  return (
+    <GodButton
+      {...props}
+      name="Fire"
+      icon="/mosslings/icons/fire.png"
+      power="fire"
+    />
+  );
 }
 export function GodTornado(props: ControlsProps) {
-  return <GodButton {...props} name="Tornado" icon="tornado" power="tornado" />;
+  return (
+    <GodButton
+      {...props}
+      name="Tornado"
+      icon="/mosslings/icons/tornado.png"
+      power="tornado"
+    />
+  );
 }
 export function GodQuake(props: ControlsProps) {
-  return <GodButton {...props} name="Quake" icon="quake" power="quake" />;
+  return (
+    <GodButton
+      {...props}
+      name="Quake"
+      icon="/mosslings/icons/quake.png"
+      power="quake"
+    />
+  );
 }
 export function GodLightning(props: ControlsProps) {
   return (
-    <GodButton {...props} name="Lightning" icon="lightning" power="lightning" />
+    <GodButton
+      {...props}
+      name="Lightning"
+      icon="/mosslings/icons/lightning.png"
+      power="lightning"
+    />
   );
 }
 export function GodMeteor(props: ControlsProps) {
-  return <GodButton {...props} name="Meteor" icon="meteor" power="meteor" />;
+  return (
+    <GodButton
+      {...props}
+      name="Meteor"
+      icon="/mosslings/icons/meteor.png"
+      power="meteor"
+    />
+  );
 }
 export function GodControls({
   ref,

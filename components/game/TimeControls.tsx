@@ -1,8 +1,19 @@
 import { type CSSProperties, useState } from "react";
 import { MONTH_SECONDS, type Season } from "@/lib/game-time";
 import { HelpModal } from "./HelpModal";
-import { PixelIcon, seasonSunIcon } from "./PixelIcon";
+import { HudIcon } from "./HudIcon";
 import { useMusic } from "./useMusic";
+
+const SEASON_SUN: Record<Season, string> = {
+  Summer: "/mosslings/icons/sun.png",
+  Spring: "/mosslings/icons/sun-spring.png",
+  Autumn: "/mosslings/icons/sun-autumn.png",
+  Winter: "/mosslings/icons/sun-winter.png",
+};
+
+export function seasonSunIcon(season: Season): string {
+  return SEASON_SUN[season];
+}
 export function CalendarHeartbeat({
   rate = 1,
   isPlaying = true,
@@ -20,7 +31,7 @@ export function CalendarHeartbeat({
       style={heartbeatStyle}
       aria-hidden="true"
     >
-      <PixelIcon name="heart" />
+      <HudIcon src="/mosslings/icons/heart.png" />
     </div>
   );
 }
@@ -37,7 +48,7 @@ export function Year({
 }) {
   return (
     <div className="year panel">
-      <PixelIcon name={seasonSunIcon(season)} />
+      <HudIcon src={seasonSunIcon(season)} />
       <div className="year-date">
         <span>Year {year}</span>
         <span>{season}</span>
@@ -62,7 +73,11 @@ export function PlayMute({
       title={muted ? "Unmute music" : "Mute music"}
       onClick={onToggle}
     >
-      <PixelIcon name={muted ? "muted" : "speaker"} />
+      <HudIcon
+        src={
+          muted ? "/mosslings/icons/muted.png" : "/mosslings/icons/speaker.png"
+        }
+      />
     </button>
   );
 }
@@ -81,7 +96,11 @@ export function PlayPause({
       title={isPlaying ? "Pause" : "Play at normal speed"}
       onClick={onToggle}
     >
-      <PixelIcon name={isPlaying ? "pause" : "play"} />
+      <HudIcon
+        src={
+          isPlaying ? "/mosslings/icons/pause.png" : "/mosslings/icons/play.png"
+        }
+      />
     </button>
   );
 }
@@ -94,7 +113,7 @@ export function PlaySkip({ onSkip }: { onSkip: () => void }) {
       title="Skip to next spring"
       onClick={onSkip}
     >
-      <PixelIcon name="skip" />
+      <HudIcon src="/mosslings/icons/skip.png" />
     </button>
   );
 }
@@ -115,7 +134,7 @@ export function PlayFast({
       title={`Fast forward to ${nextRate}× speed`}
       onClick={onFastForward}
     >
-      <PixelIcon name="fast" />
+      <HudIcon src="/mosslings/icons/fast.png" />
     </button>
   );
 }
@@ -145,7 +164,7 @@ export function PlayControls({
         title="Help"
         onClick={() => setHelpOpen(true)}
       >
-        <PixelIcon name="help" />
+        <HudIcon src="/mosslings/icons/help.png" />
       </button>
       <PlayMute muted={music.muted} onToggle={music.toggleMuted} />
       <PlayPause isPlaying={isPlaying} onToggle={onToggle} />

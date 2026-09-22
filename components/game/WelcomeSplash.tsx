@@ -114,7 +114,7 @@ export function WelcomeSplash({
         <Image
           className="welcome-scene"
           src="/mosslings/welcome-farm.webp"
-          alt="Eight colorful Mosslings farm a sunny garden under open sky. Two nestle close and blush, while the others tend little crop rows."
+          alt="Eight colorful Mosslings farm a sunny garden under open sky. Two nestle close and blush, while the others tend little carrot rows."
           width={864}
           height={1152}
           sizes="(max-width: 700px) 94vw, 480px"
@@ -122,8 +122,8 @@ export function WelcomeSplash({
         />
         <Image
           className="welcome-logo"
-          src="/mosslings/logo-splash.png"
-          alt="Mosslings — Small bits of wonder"
+          src="/mosslings/logo-welcome.png"
+          alt="Mosslings — Small genetic wonders"
           width={1250}
           height={394}
           sizes="(max-width: 700px) 90vw, 420px"
@@ -141,9 +141,9 @@ export function WelcomeSplash({
         <h2>Your world. Their little lives.</h2>
         <p>
           This is a living sandbox. You shape the land; the Mosslings wander
-          through it. Bring rain, plant crops, or unleash a disaster and see how
-          they respond. There’s no score to chase. Experiment, observe, and see
-          what happens.
+          through it. Bring rain, plant carrots, or unleash a disaster and see
+          how they respond. There’s no score to chase. Experiment, observe, and
+          see what happens.
         </p>
         <ul className="welcome-hints">
           <li>

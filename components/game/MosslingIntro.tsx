@@ -168,7 +168,7 @@ export function MosslingIntro({
             <h2 id="mossling-intro-powers-title">These are your god powers.</h2>
             <p>
               Choose a power from the rail, then click tiles on the map to use
-              it. Bring rain, sunlight, and crops to help your Mosslings — or
+              it. Bring rain, sunlight, and carrots to help your Mosslings — or
               unleash fire, disease, and disasters to see how they cope. Press
               Esc to cancel a selected power.
             </p>
@@ -182,8 +182,9 @@ export function MosslingIntro({
             <p>
               It has rivers, trees, grass, and natural disasters. Mosslings roam
               across it, foraging for food, raising families, and weathering
-              whatever you send their way. Bring rain, plant crops, or call down
-              fire and see how the land — and its little inhabitants — respond.
+              whatever you send their way. Bring rain, plant carrots, or call
+              down fire and see how the land — and its little inhabitants —
+              respond.
             </p>
           </>
         )}

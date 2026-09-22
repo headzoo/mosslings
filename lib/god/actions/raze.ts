@@ -20,18 +20,18 @@ function sow(world: GodContext, cell: MapCell) {
 
 export const raze: GodAction = {
   id: "raze",
-  label: "Crops",
+  label: "Carrots",
   canPlace(world, point) {
     const cell = world.cell(point.x, point.y);
     if (cell?.tree) return null;
-    if (cell?.burning) return "Put out the fire before planting crops here.";
+    if (cell?.burning) return "Put out the fire before planting carrots here.";
     if (cell?.terrain === "water")
-      return "Crops needs ground or forest, not water.";
+      return "Carrots need ground or forest, not water.";
     if (cell?.terrain === "rock")
-      return "Crops needs ground or forest, not stone.";
+      return "Carrots need ground or forest, not stone.";
     if (cell && (cell.terrain === "grass" || cell.terrain === "dirt"))
       return null;
-    return "Choose a forest or ground tile for crops.";
+    return "Choose a forest or ground tile for carrots.";
   },
   create: (point, seed, id) => effect("raze", point, seed, id, 0.8, 2),
   update(e, world) {

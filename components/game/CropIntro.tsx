@@ -9,11 +9,12 @@ export function CropIntro({ onDismiss }: CropIntroProps) {
     <section className="crop-intro" aria-labelledby="crop-intro-title">
       <div className="crop-intro-dim" aria-hidden="true" />
       <div className="crop-intro-copy mossling-intro-copy">
-        <h2 id="crop-intro-title">You planted crops!</h2>
+        <h2 id="crop-intro-title">You planted carrots!</h2>
         <p>
-          Crops need sun and rain to grow. Use your god powers to bring light
-          and water when they need it. But watch the skies — too much rain in
-          one place can flood the land and wash your fields away.
+          Carrots are a Mossling favorite. Give the little rows rain and sun,
+          and they will grow into bright orange snacks for hungry Mosslings. Go
+          gently with the rain, though — too much in one place can flood the
+          garden.
         </p>
         <button type="button" onClick={onDismiss}>
           Continue

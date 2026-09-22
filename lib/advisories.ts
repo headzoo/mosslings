@@ -66,7 +66,7 @@ export function stepAdvisory(
   const fresh = world.events.filter((event) => event.id > memory.seenEventId);
   const starveEvent = fresh.some((event) => event.message.includes("starved"));
   const witherEvent = fresh.some((event) =>
-    event.message.includes("crops withered"),
+    event.message.includes("carrots withered"),
   );
   let starve = memory.starve || starveEvent;
   let wither = memory.wither || witherEvent;

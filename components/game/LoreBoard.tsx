@@ -81,32 +81,32 @@ const advisoryItems: Record<
   starve: {
     image: "/mosslings/lore/news/hunger.png",
     alt: "A worried moss creature looks across an empty garden.",
-    line: "Mosslings are starving. Bring rain to the fields and use Crops to plant more.",
+    line: "Mosslings are starving. Bring rain to the garden and plant more Carrots.",
   },
   wither: {
     image: "/mosslings/lore/news/crops.png",
-    alt: "A worried moss creature sits beside rows of withered crops.",
-    line: "Crops are dying. Mossling lives are in danger if God doesn't bring rain!",
+    alt: "A worried moss creature sits beside rows of withered carrots.",
+    line: "The carrots are dying. Mossling lives are in danger if God doesn't bring rain!",
   },
   dry: {
     image: "/mosslings/lore/news/crops.png",
-    alt: "A worried moss creature sits beside rows of drying crops.",
-    line: "The crops are drying out. Bring rain before they wither.",
+    alt: "A worried moss creature sits beside rows of drying carrots.",
+    line: "The carrots are drying out. Bring rain before they wither.",
   },
   shade: {
     image: "/mosslings/lore/news/crops.png",
     alt: "A moss creature sits beside a field waiting in the shade.",
-    line: "The fields are in shadow. Crops need sun as well as rain.",
+    line: "The carrot rows are in shadow. Carrots need sun as well as rain.",
   },
   health: {
     image: "/mosslings/lore/news/health.png",
     alt: "A tired moss creature droops in the grass.",
-    line: "Mossling health keeps falling. They need more ripe crops. Use Crops, and bring rain if the fields are dry.",
+    line: "Mossling health keeps falling. They need more ripe carrots. Use Carrots, and bring rain if the garden is dry.",
   },
   shortage: {
     image: "/mosslings/lore/news/hunger.png",
     alt: "A worried moss creature looks across a bare garden.",
-    line: "There are not enough crops. One ripe field feeds about one Mossling. Use Crops to plant more.",
+    line: "There are not enough carrots. One ripe patch feeds about one Mossling. Use Carrots to plant more.",
   },
 };
 
@@ -259,7 +259,7 @@ export function LoreBoard({ flash }: { flash: NewsFlash | null }) {
     <section
       className="lore-board"
       data-news={news ? "" : undefined}
-      aria-label={news ? "This just in" : "About the Mosslings"}
+      aria-label={news ? "This Just In!" : "About the Mosslings"}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onFocus={() => setFocused(true)}
@@ -271,7 +271,7 @@ export function LoreBoard({ flash }: { flash: NewsFlash | null }) {
       <header className="lore-heading">
         <h2>
           {news ? <NewsMark /> : null}
-          {news ? "This just in" : "About the Mosslings"}
+          {news ? "This Just In!" : "About the Mosslings"}
         </h2>
         {news ? null : (
           <span>
@@ -301,7 +301,7 @@ export function LoreBoard({ flash }: { flash: NewsFlash | null }) {
         ? createPortal(
             <LoreDialog
               note={note}
-              title={news ? "This just in" : "About the Mosslings"}
+              title={news ? "This Just In!" : "About the Mosslings"}
               alert={news !== null}
               canAdvance={news === null}
               onNext={advance}

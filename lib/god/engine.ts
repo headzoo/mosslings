@@ -557,7 +557,7 @@ export class GodWorld {
           this.record(`The forest spread into ${result.trees} tiles.`);
         if (withered)
           this.record(
-            `The crops withered on ${withered} tile${withered === 1 ? "" : "s"}.`,
+            `The carrots withered on ${withered} tile${withered === 1 ? "" : "s"}.`,
           );
         this.recordResourceHistory();
         this.nextMonth += MONTH_SECONDS;

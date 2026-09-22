@@ -355,7 +355,7 @@ test("a quiet rejection is not written to the event log", () => {
   const before = world.events.length;
   assert.equal(
     world.cast("raze", 0, 0, { quiet: true }),
-    "Crops needs ground or forest, not water.",
+    "Carrots need ground or forest, not water.",
   );
   assert.equal(world.events.length, before);
 });

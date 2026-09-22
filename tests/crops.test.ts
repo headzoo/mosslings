@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   advanceCrops,
-  cropFoodSupply,
   CROP_MOISTURE_LOSS,
   CROP_WILT_MOISTURE,
+  cropFoodSupply,
   plantStarterFields,
 } from "../lib/crops";
 import { MONTH_SECONDS, SEASON_SECONDS } from "../lib/game-time";
@@ -189,7 +189,7 @@ test("six wet and lit months ripen a planting, darkness stalls it, drought takes
   assert.equal(dry.snapshot().resources.food, 0);
   assert.ok(
     dry.events.some(
-      (event) => event.message === "The crops withered on 1 tile.",
+      (event) => event.message === "The carrots withered on 1 tile.",
     ),
   );
 

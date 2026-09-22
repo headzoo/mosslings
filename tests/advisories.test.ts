@@ -103,7 +103,7 @@ test("starvation is the first warning", () => {
 test("withering crops outrank a dry field", () => {
   const step = show(
     world({
-      events: [{ id: 1, message: "The crops withered on 2 tiles." }],
+      events: [{ id: 1, message: "The carrots withered on 2 tiles." }],
       crops: [
         { growth: 1, moisture: 0.2 },
         { growth: 1, moisture: 0.2 },

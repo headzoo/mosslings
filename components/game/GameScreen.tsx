@@ -113,7 +113,6 @@ export function GameScreen({
     cloneMossling,
     events,
     resources,
-    resourceHistory,
     revisionRef,
   } = useGodWorld(
     initialMap,
@@ -515,6 +514,7 @@ export function GameScreen({
     ? (species.find((group) => group.key === selected.speciesKey)?.members ??
       [])
     : [];
+  const highlightedIds = new Set(highlighted.map((mossling) => mossling.id));
   const selectedMossling = selected?.mossling
     ? mosslings.find((item) => item.id === selected.mossling?.id)
     : undefined;
@@ -529,15 +529,15 @@ export function GameScreen({
         <div className="brand">
           <Image
             className="brand-logo"
-            src="/mosslings/logo-8bit.png"
+            src="/mosslings/logo-header-lg.png"
             width={1271}
             height={430}
             sizes="(max-width: 620px) 203px, (max-width: 900px) 225px, (max-width: 1300px) 234px, 302px"
             loading="eager"
-            alt="Mosslings — Small bits of wonder"
+            alt="Mosslings — Small genetic wonders"
           />
         </div>
-        <Health resources={resources} history={resourceHistory} />
+        <Health resources={resources} />
         <Year
           year={gameTime.year}
           season={gameTime.season}
@@ -751,7 +751,7 @@ export function GameScreen({
             ) : (
               <p className="map-loading">Growing a little world…</p>
             )}
-            {map && camera && highlighted.length > 0 && (
+            {map && camera && mosslings.length > 0 && (
               <div
                 className="species-highlights"
                 style={{
@@ -761,10 +761,14 @@ export function GameScreen({
                   height: map.height * tileSize,
                 }}
               >
-                {highlighted.map((mossling) => (
+                {mosslings.map((mossling) => (
                   <span
                     key={mossling.id}
-                    className="species-highlight"
+                    className={
+                      highlightedIds.has(mossling.id)
+                        ? "mossling-outline mossling-outline--tint"
+                        : "mossling-outline"
+                    }
                     style={{
                       left: (mossling.cellIndex % map.width) * tileSize,
                       top:
