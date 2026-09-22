@@ -24,8 +24,9 @@ import {
   introSpotlightRadiusPx,
 } from "@/lib/intro-mosslings";
 import type { MapCell, MapData } from "@/lib/map";
-import { type Camera, getCamera } from "@/lib/map-camera";
+import { type Camera, getCamera, zoomAtPoint } from "@/lib/map-camera";
 import type { PreviewMossling } from "@/lib/map-preview";
+import { detailMode } from "@/lib/mossling-detail";
 import {
   clusterSpecies,
   nearestMember,
@@ -33,7 +34,9 @@ import {
   speciesKey,
 } from "@/lib/species";
 import { speciesName } from "@/lib/species-name";
+import { terrainDetailActive } from "@/lib/terrain-detail";
 import { CropIntro } from "./CropIntro";
+import { type DisasterId, isDisasterPower } from "./DestroyedStatIcon";
 import { GameMap, Minimap } from "./GameMap";
 import { GodControls } from "./GodControls";
 import { GodEffects } from "./GodEffects";
@@ -44,19 +47,26 @@ import {
   NEWS_MS,
   type NewsFlash,
 } from "./LoreBoard";
+import { MatingHearts } from "./MatingHearts";
+import { MosslingDetail } from "./MosslingDetail";
 import { type IntroPhase, MosslingIntro } from "./MosslingIntro";
+import { MoveIntro } from "./MoveIntro";
 import { Pollinators } from "./Pollinators";
+import { SeasonDim } from "./SeasonDim";
 import { SkyClouds } from "./SkyClouds";
 import { SpeciesList } from "./SpeciesList";
+import { TerrainDetail } from "./TerrainDetail";
 import { TileInspector } from "./TileInspector";
 import { PlayControls, Year } from "./TimeControls";
 import { useGameTime } from "./useGameTime";
 import { useGodWorld } from "./useGodWorld";
 import {
   isCropIntroDismissed,
+  isMoveIntroDismissed,
   rememberCropIntroDismissal,
+  rememberMoveIntroDismissal,
 } from "./WelcomeSplash";
-import { ZoomControls } from "./ZoomControls";
+import { type MapTool, ZoomControls } from "./ZoomControls";
 
 type TileSelection = {
   seed: number;
@@ -102,8 +112,12 @@ export function GameScreen({
   const introActive = introPhase !== null;
   const [cropIntroOpen, setCropIntroOpen] = useState(false);
   const cropIntroTriggered = useRef(false);
-  const tutorialPaused = introActive || cropIntroOpen;
-  const gameTime = useGameTime(suspended || cropIntroOpen);
+  const [mapControlsIntroOpen, setMapControlsIntroOpen] = useState(false);
+  const mapControlsIntroTriggered = useRef(false);
+  const tutorialPaused = introActive || cropIntroOpen || mapControlsIntroOpen;
+  const gameTime = useGameTime(
+    suspended || cropIntroOpen || mapControlsIntroOpen,
+  );
   const {
     map,
     mosslings,
@@ -114,6 +128,7 @@ export function GameScreen({
     events,
     resources,
     revisionRef,
+    subscribeFrame,
   } = useGodWorld(
     initialMap,
     initialMosslings,
@@ -129,6 +144,10 @@ export function GameScreen({
     message: string;
     x: number;
     y: number;
+  } | null>(null);
+  const [destroyedHudFlash, setDestroyedHudFlash] = useState<{
+    kind: DisasterId;
+    effectId: number;
   } | null>(null);
   useEffect(() => {
     const cancel = (event: KeyboardEvent) => {
@@ -146,10 +165,11 @@ export function GameScreen({
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const speciesListRef = useRef<HTMLElement | null>(null);
   const godRailRef = useRef<HTMLElement | null>(null);
+  const zoomControlsRef = useRef<HTMLFieldSetElement | null>(null);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const [tileSize, setTileSize] = useState(DEFAULT_TILE_SIZE);
   const [center, setCenter] = useState(DEFAULT_CENTER);
-  const [moveMode, setMoveMode] = useState(false);
+  const [mapTool, setMapTool] = useState<MapTool>("pointer");
   const [panning, setPanning] = useState(false);
   const cameraRef = useRef<Camera | null>(null);
   const cameraAnim = useRef<number | null>(null);
@@ -222,6 +242,11 @@ export function GameScreen({
     viewWidth: number;
     viewHeight: number;
   } | null>(null);
+  const zoomGesture = useRef<{
+    x: number;
+    y: number;
+    moved: boolean;
+  } | null>(null);
   const attachBoard = useCallback(
     (node: HTMLDivElement | null) => {
       viewportRef.current = node;
@@ -237,18 +262,53 @@ export function GameScreen({
     },
     [tutorialPaused],
   );
-  const stopPan = () => {
+  const stopPan = useCallback(() => {
     pan.current = null;
     setPanning(false);
-  };
+  }, []);
+  const maybeOpenMapControlsIntro = useCallback(() => {
+    if (mapControlsIntroTriggered.current || isMoveIntroDismissed()) return;
+    mapControlsIntroTriggered.current = true;
+    setMapControlsIntroOpen(true);
+  }, []);
+  const selectMapTool = useCallback(
+    (next: MapTool) => {
+      maybeOpenMapControlsIntro();
+      if (next === "move" && tileSize <= DEFAULT_TILE_SIZE) return;
+      if (next === "zoom-out" && tileSize <= DEFAULT_TILE_SIZE) return;
+      if (next === "zoom-in" && tileSize >= 32) return;
+      if (next === mapTool && next !== "pointer") {
+        setMapTool("pointer");
+        stopPan();
+        return;
+      }
+      if (next !== "move") stopPan();
+      setMapTool(next);
+    },
+    [maybeOpenMapControlsIntro, tileSize, mapTool, stopPan],
+  );
   useEffect(() => {
-    if (tutorialPaused || tileSize <= DEFAULT_TILE_SIZE) {
-      setMoveMode(false);
+    if (
+      introActive ||
+      cropIntroOpen ||
+      (mapTool === "move" && tileSize <= DEFAULT_TILE_SIZE)
+    ) {
+      setMapTool("pointer");
       stopPan();
     }
-  }, [tutorialPaused, tileSize]);
+  }, [introActive, cropIntroOpen, mapTool, tileSize, stopPan]);
   useEffect(() => {
-    if (!moveMode) return;
+    if (
+      introActive ||
+      cropIntroOpen ||
+      (mapTool === "zoom-in" && tileSize >= 32) ||
+      (mapTool === "zoom-out" && tileSize <= DEFAULT_TILE_SIZE)
+    ) {
+      setMapTool("pointer");
+    }
+  }, [introActive, cropIntroOpen, mapTool, tileSize]);
+  useEffect(() => {
+    if (mapTool === "pointer") return;
     const exit = (event: PointerEvent) => {
       const board = viewportRef.current;
       const target = event.target;
@@ -258,12 +318,12 @@ export function GameScreen({
         !(target instanceof Element && target.closest("dialog"))
       )
         return;
-      setMoveMode(false);
+      setMapTool("pointer");
       stopPan();
     };
     window.addEventListener("pointerdown", exit);
     return () => window.removeEventListener("pointerdown", exit);
-  }, [moveMode]);
+  }, [mapTool, stopPan]);
   useEffect(() => {
     if (!map) return;
     const introZoomed =
@@ -368,6 +428,16 @@ export function GameScreen({
   const placePower = (x: number, y: number, quiet: boolean) => {
     if (!power || !map) return false;
     const message = cast(power, x, y, quiet ? { quiet: true } : undefined);
+    if (
+      message === null &&
+      isDisasterPower(power) &&
+      engine?.effects.at(-1)?.kind === power
+    ) {
+      const placed = engine.effects.at(-1);
+      if (placed) {
+        setDestroyedHudFlash({ kind: power, effectId: placed.id });
+      }
+    }
     if (message === EFFECT_CAP_MESSAGE) {
       if (!quiet && power === "raze") {
         setPlacementTooltip({ message, x, y });
@@ -515,6 +585,10 @@ export function GameScreen({
       [])
     : [];
   const highlightedIds = new Set(highlighted.map((mossling) => mossling.id));
+  const highlightRef = useRef(highlightedIds);
+  highlightRef.current = highlightedIds;
+  const mosslingDetail = detailMode(tileSize);
+  const roundMosslings = mosslingDetail !== "square";
   const selectedMossling = selected?.mossling
     ? mosslings.find((item) => item.id === selected.mossling?.id)
     : undefined;
@@ -523,6 +597,11 @@ export function GameScreen({
         group.members.some((member) => member.id === selectedMossling.id),
       )?.name ?? speciesName(speciesKey(selectedMossling)))
     : undefined;
+  const activeDestroyedDisaster =
+    destroyedHudFlash &&
+    engine?.effects.some((effect) => effect.id === destroyedHudFlash.effectId)
+      ? destroyedHudFlash.kind
+      : null;
   return (
     <main className="game-screen">
       <header className="game-header">
@@ -537,12 +616,17 @@ export function GameScreen({
             alt="Mosslings — Small genetic wonders"
           />
         </div>
-        <Health resources={resources} />
+        <Health
+          resources={resources}
+          rate={gameTime.rate}
+          isPlaying={gameTime.isPlaying}
+          elapsed={gameTime.getElapsed}
+          activeDisaster={activeDestroyedDisaster}
+        />
         <Year
           year={gameTime.year}
           season={gameTime.season}
-          rate={gameTime.rate}
-          isPlaying={gameTime.isPlaying}
+          elapsed={gameTime.getElapsed}
         />
         <PlayControls
           isPlaying={gameTime.isPlaying}
@@ -573,15 +657,26 @@ export function GameScreen({
               type="button"
               className="camera-surface"
               data-targeting={!!power || !!mosslingTarget}
-              data-move={moveMode}
+              data-move={mapTool === "move"}
+              data-zoom={
+                mapTool === "zoom-in"
+                  ? "in"
+                  : mapTool === "zoom-out"
+                    ? "out"
+                    : undefined
+              }
               data-panning={panning}
               aria-label={
-                moveMode
-                  ? "Map camera: drag to move the map"
-                  : "Map camera: click a tile to inspect, use plus and minus to zoom"
+                mapTool === "zoom-in"
+                  ? "Map camera: click to zoom in"
+                  : mapTool === "zoom-out"
+                    ? "Map camera: click to zoom out"
+                    : mapTool === "move"
+                      ? "Map camera: drag to move the map"
+                      : "Map camera: click a tile to inspect"
               }
               onClick={(event) => {
-                if (tutorialPaused || moveMode) return;
+                if (tutorialPaused || mapTool !== "pointer") return;
                 if (event.detail === 0 && viewportRef.current) {
                   const rect = viewportRef.current.getBoundingClientRect();
                   selectAt(
@@ -644,7 +739,15 @@ export function GameScreen({
                 if (tutorialPaused || !map || !camera || event.button !== 0)
                   return;
                 event.currentTarget.setPointerCapture(event.pointerId);
-                if (moveMode) {
+                if (mapTool === "zoom-in" || mapTool === "zoom-out") {
+                  zoomGesture.current = {
+                    x: event.clientX,
+                    y: event.clientY,
+                    moved: false,
+                  };
+                  return;
+                }
+                if (mapTool === "move") {
                   pan.current = {
                     x: event.clientX,
                     y: event.clientY,
@@ -670,6 +773,17 @@ export function GameScreen({
                   stroke.current.stopped = placePower(tile.x, tile.y, false);
               }}
               onPointerMove={(event) => {
+                if (zoomGesture.current) {
+                  if (
+                    !zoomGesture.current.moved &&
+                    Math.hypot(
+                      event.clientX - zoomGesture.current.x,
+                      event.clientY - zoomGesture.current.y,
+                    ) > 5
+                  )
+                    zoomGesture.current.moved = true;
+                  return;
+                }
                 const drag = pan.current;
                 if (drag && map) {
                   const focusX =
@@ -710,6 +824,33 @@ export function GameScreen({
                 stroke.current.stopped = placePower(tile.x, tile.y, true);
               }}
               onPointerUp={(event) => {
+                if (zoomGesture.current) {
+                  const gesture = zoomGesture.current;
+                  zoomGesture.current = null;
+                  if (
+                    !gesture.moved &&
+                    (mapTool === "zoom-in" || mapTool === "zoom-out") &&
+                    map &&
+                    camera &&
+                    viewportRef.current
+                  ) {
+                    const rect = viewportRef.current.getBoundingClientRect();
+                    const next = zoomAtPoint(
+                      map,
+                      viewport,
+                      tileSize,
+                      camera,
+                      {
+                        x: event.clientX - rect.left,
+                        y: event.clientY - rect.top,
+                      },
+                      mapTool === "zoom-in" ? 1 : -1,
+                    );
+                    setTileSize(next.tileSize);
+                    setCenter(next.center);
+                  }
+                  return;
+                }
                 if (pan.current) {
                   stopPan();
                   return;
@@ -724,10 +865,12 @@ export function GameScreen({
               }}
               onPointerCancel={() => {
                 stroke.current = null;
+                zoomGesture.current = null;
                 stopPan();
               }}
               onLostPointerCapture={() => {
                 stroke.current = null;
+                zoomGesture.current = null;
                 stopPan();
               }}
             >
@@ -739,6 +882,7 @@ export function GameScreen({
                 mosslings={mosslings}
                 elapsed={gameTime.getElapsed}
                 revisionRef={revisionRef}
+                subscribeFrame={subscribeFrame}
                 style={{
                   position: "absolute",
                   width: map.width * tileSize,
@@ -751,35 +895,62 @@ export function GameScreen({
             ) : (
               <p className="map-loading">Growing a little world…</p>
             )}
-            {map && camera && mosslings.length > 0 && (
-              <div
-                className="species-highlights"
-                style={{
-                  left: camera.left,
-                  top: camera.top,
-                  width: map.width * tileSize,
-                  height: map.height * tileSize,
-                }}
-              >
-                {mosslings.map((mossling) => (
-                  <span
-                    key={mossling.id}
-                    className={
-                      highlightedIds.has(mossling.id)
-                        ? "mossling-outline mossling-outline--tint"
-                        : "mossling-outline"
-                    }
-                    style={{
-                      left: (mossling.cellIndex % map.width) * tileSize,
-                      top:
-                        Math.floor(mossling.cellIndex / map.width) * tileSize,
-                      width: tileSize,
-                      height: tileSize,
-                    }}
-                  />
-                ))}
-              </div>
+            {map && camera && terrainDetailActive(tileSize) && (
+              <TerrainDetail
+                map={map}
+                camera={camera}
+                cameraRef={cameraRef}
+                tileSize={tileSize}
+                elapsed={gameTime.getElapsed}
+                revisionRef={revisionRef}
+                subscribeFrame={subscribeFrame}
+              />
             )}
+            {map && camera && roundMosslings && (
+              <MosslingDetail
+                map={map}
+                mosslings={mosslings}
+                cameraRef={cameraRef}
+                tileSize={tileSize}
+                width={viewport.width}
+                height={viewport.height}
+                elapsed={gameTime.getElapsed}
+                highlightRef={highlightRef}
+                subscribeFrame={subscribeFrame}
+              />
+            )}
+            {map &&
+              camera &&
+              mosslings.length > 0 &&
+              mosslingDetail === "square" && (
+                <div
+                  className="species-highlights"
+                  style={{
+                    left: camera.left,
+                    top: camera.top,
+                    width: map.width * tileSize,
+                    height: map.height * tileSize,
+                  }}
+                >
+                  {mosslings.map((mossling) => (
+                    <span
+                      key={mossling.id}
+                      className={
+                        highlightedIds.has(mossling.id)
+                          ? "mossling-outline mossling-outline--tint"
+                          : "mossling-outline"
+                      }
+                      style={{
+                        left: (mossling.cellIndex % map.width) * tileSize,
+                        top:
+                          Math.floor(mossling.cellIndex / map.width) * tileSize,
+                        width: tileSize,
+                        height: tileSize,
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
             {map && camera && (
               <Pollinators
                 map={map}
@@ -789,6 +960,19 @@ export function GameScreen({
                 height={viewport.height}
                 elapsed={gameTime.getElapsed}
                 revisionRef={revisionRef}
+                subscribeFrame={subscribeFrame}
+              />
+            )}
+            {map && camera && (
+              <MatingHearts
+                map={map}
+                mosslings={mosslings}
+                cameraRef={cameraRef}
+                tileSize={tileSize}
+                width={viewport.width}
+                height={viewport.height}
+                elapsed={gameTime.getElapsed}
+                subscribeFrame={subscribeFrame}
               />
             )}
             {map && camera && (
@@ -801,6 +985,7 @@ export function GameScreen({
                 width={viewport.width}
                 height={viewport.height}
                 elapsed={gameTime.getElapsed}
+                subscribeFrame={subscribeFrame}
               />
             )}
             {engine && camera && (
@@ -810,6 +995,13 @@ export function GameScreen({
                 tileSize={tileSize}
                 width={viewport.width}
                 height={viewport.height}
+                subscribeFrame={subscribeFrame}
+              />
+            )}
+            {map && camera && (
+              <SeasonDim
+                elapsed={gameTime.getElapsed}
+                subscribeFrame={subscribeFrame}
               />
             )}
             {placementTooltip && camera && (
@@ -886,6 +1078,19 @@ export function GameScreen({
                 }}
               />
             )}
+            {mapControlsIntroOpen && (
+              <MoveIntro
+                anchorRef={zoomControlsRef}
+                onDismiss={() => {
+                  try {
+                    rememberMoveIntroDismissal();
+                  } catch {
+                    // Best-effort preference; still close the callout.
+                  }
+                  setMapControlsIntroOpen(false);
+                }}
+              />
+            )}
             {introPhase &&
               introPhase !== "species" &&
               introPhase !== "powers" &&
@@ -897,14 +1102,11 @@ export function GameScreen({
                 />
               )}
             <ZoomControls
+              ref={zoomControlsRef}
               tileSize={tileSize}
               ready={!!map && !tutorialPaused}
-              moveMode={moveMode}
-              onToggleMove={() => {
-                if (tileSize <= DEFAULT_TILE_SIZE) return;
-                setMoveMode((on) => !on);
-              }}
-              onZoom={zoom}
+              tool={mapTool}
+              onSelectTool={selectMapTool}
             />
             {selected && (
               <TileInspector
@@ -974,6 +1176,7 @@ export function GameScreen({
             tileSize={tileSize}
             elapsed={gameTime.getElapsed}
             revisionRef={revisionRef}
+            subscribeFrame={subscribeFrame}
             onCenter={(x, y) => setCenter({ x, y })}
           />
         </aside>

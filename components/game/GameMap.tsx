@@ -13,6 +13,7 @@ import {
   paintMossling,
   TILE_SIZE,
 } from "@/lib/map-preview";
+import type { FramePainter } from "./useGodWorld";
 
 function mapPoint(
   element: HTMLElement,
@@ -62,6 +63,7 @@ export function GameMap({
   style,
   elapsed,
   revisionRef,
+  subscribeFrame,
 }: {
   map: MapData;
   mosslings: PreviewMossling[];
@@ -69,6 +71,7 @@ export function GameMap({
   style?: CSSProperties;
   elapsed?: () => number;
   revisionRef?: { current: number };
+  subscribeFrame: (painter: FramePainter) => () => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scale = miniature ? 1 : TILE_SIZE;
@@ -86,19 +89,14 @@ export function GameMap({
     if (!context) return;
     const hashes = new Int32Array(map.cells.length);
     const sprites = new Map<number, SpriteStamp>();
-    const paintSprites = (indexes: Set<number>, ritual: boolean) => {
-      const elapsedNow = elapsedRef.current?.() ?? 0;
+    const paintSprites = (indexes: Set<number>) => {
       const width = mapRef.current.width;
       for (const mossling of mosslingsRef.current) {
         const above = mossling.cellIndex - width;
         const panic =
           (mossling.panic ?? 0) > 0.1 && above >= 0 && indexes.has(above);
-        if (
-          indexes.has(mossling.cellIndex) ||
-          panic ||
-          (ritual && mossling.ritual)
-        )
-          paintMossling(context, mapRef.current, mossling, scale, elapsedNow);
+        if (indexes.has(mossling.cellIndex) || panic)
+          paintMossling(context, mapRef.current, mossling, scale);
       }
     };
     paintMap(
@@ -115,7 +113,6 @@ export function GameMap({
     let seenRevision = revision.current?.current ?? 0;
     let seenMosslings = mosslingsRef.current;
     let seenFoliage = foliageStep(elapsedRef.current?.() ?? 0);
-    let frame = 0;
     const loop = () => {
       const current = mapRef.current;
       const list = mosslingsRef.current;
@@ -141,8 +138,6 @@ export function GameMap({
         }
         seenRevision = nextRevision;
       }
-      let ritual = false;
-      for (const mossling of list) if (mossling.ritual) ritual = true;
       if (list !== seenMosslings) {
         const live = new Set<number>();
         for (const mossling of list) {
@@ -175,13 +170,11 @@ export function GameMap({
         const look = foliageAt(elapsedNow);
         for (const index of dirty)
           paintCell(context, current, index, scale, look);
-        paintSprites(dirty, ritual);
-      } else if (ritual) paintSprites(dirty, true);
-      frame = requestAnimationFrame(loop);
+        paintSprites(dirty);
+      }
     };
-    frame = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(frame);
-  }, [map, scale]);
+    return subscribeFrame(loop);
+  }, [map, scale, subscribeFrame]);
   return (
     <canvas
       ref={canvasRef}
@@ -202,6 +195,7 @@ export function Minimap({
   tileSize,
   elapsed,
   revisionRef,
+  subscribeFrame,
   onCenter,
 }: {
   map: MapData | null;
@@ -210,6 +204,7 @@ export function Minimap({
   tileSize: number;
   elapsed?: () => number;
   revisionRef?: { current: number };
+  subscribeFrame: (painter: FramePainter) => () => void;
   onCenter: (x: number, y: number) => void;
 }) {
   const [overBox, setOverBox] = useState(false);
@@ -316,6 +311,7 @@ export function Minimap({
               miniature
               elapsed={elapsed}
               revisionRef={revisionRef}
+              subscribeFrame={subscribeFrame}
             />
             {camera && (
               <div

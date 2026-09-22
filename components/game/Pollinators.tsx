@@ -11,6 +11,7 @@ import {
   pollinatorsForMap,
   pollinatorVisible,
 } from "@/lib/pollinators";
+import type { FramePainter } from "./useGodWorld";
 
 function onScreen(
   px: number,
@@ -98,6 +99,7 @@ export function Pollinators({
   width,
   height,
   elapsed,
+  subscribeFrame,
 }: {
   map: MapData;
   cameraRef: { current: Camera | null };
@@ -106,6 +108,7 @@ export function Pollinators({
   height: number;
   elapsed: () => number;
   revisionRef?: { current: number };
+  subscribeFrame: (painter: FramePainter) => () => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const elapsedRef = useRef(elapsed);
@@ -120,7 +123,6 @@ export function Pollinators({
     const canvas = ref.current;
     const context = canvas?.getContext("2d");
     if (!canvas || !context) return;
-    let frame = 0;
     let clear = true;
     const render = () => {
       const camera = cameraRef.current;
@@ -130,7 +132,6 @@ export function Pollinators({
           context.clearRect(0, 0, canvas.width, canvas.height);
           clear = true;
         }
-        frame = requestAnimationFrame(render);
         return;
       }
       context.clearRect(0, 0, canvas.width, canvas.height);
@@ -149,11 +150,9 @@ export function Pollinators({
           elapsedRef.current(),
         );
       }
-      frame = requestAnimationFrame(render);
     };
-    render();
-    return () => cancelAnimationFrame(frame);
-  }, [cameraRef, tileSize, width, height]);
+    return subscribeFrame(render);
+  }, [cameraRef, subscribeFrame, tileSize, width, height]);
   return (
     <canvas
       ref={ref}

@@ -99,6 +99,11 @@ button:hover {
   width: 32px;
   height: 32px;
 }
+.mossling-stat-icon {
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+}
 .health-stat-text {
   display: flex;
   flex-direction: column;
@@ -139,23 +144,27 @@ button:hover {
   width: 46px;
   height: 46px;
 }
-.calendar-heartbeat {
-  margin-left: auto;
-  width: 30px;
-  height: 30px;
+.year-sun {
+  width: 46px;
+  height: 46px;
+  image-rendering: pixelated;
+}
+.health-heartbeat {
+  width: 32px;
+  height: 32px;
   display: grid;
   place-items: center;
   transform-origin: center;
-  animation: calendar-heartbeat var(--heartbeat-duration) infinite;
+  animation: health-heartbeat var(--heartbeat-duration) infinite;
 }
-.calendar-heartbeat[data-playing="false"] {
+.health-heartbeat[data-playing="false"] {
   animation-play-state: paused;
 }
-.calendar-heartbeat .pixel-icon {
-  width: 30px;
-  height: 30px;
+.health-heartbeat .pixel-icon {
+  width: 32px;
+  height: 32px;
 }
-@keyframes calendar-heartbeat {
+@keyframes health-heartbeat {
   0%,
   78%,
   100% {
@@ -578,8 +587,28 @@ button:hover {
   position: absolute;
   box-shadow: 0 0 0 1px #1a1400;
 }
+.mossling-outline--round {
+  border-radius: 50%;
+}
+.mossling-outline--sprite {
+  border-radius: 50%;
+  box-shadow: none;
+}
 .mossling-outline--tint {
   background: rgb(255 225 40 / 42%);
+}
+.mossling-detail {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  image-rendering: pixelated;
+}
+.terrain-detail {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  image-rendering: pixelated;
 }
 .minimap {
   padding: 13px;
@@ -649,6 +678,10 @@ button:hover {
     width: 26px;
     height: 26px;
   }
+  .mossling-stat-icon {
+    width: 26px;
+    height: 26px;
+  }
   .health dt {
     font-size: 12px;
   }
@@ -664,8 +697,12 @@ button:hover {
     width: 36px;
     height: 36px;
   }
-  .calendar-heartbeat,
-  .calendar-heartbeat .pixel-icon {
+  .year-sun {
+    width: 36px;
+    height: 36px;
+  }
+  .health-heartbeat,
+  .health-heartbeat .pixel-icon {
     width: 28px;
     height: 28px;
   }
@@ -788,8 +825,12 @@ button:hover {
     width: 28px;
     height: 28px;
   }
-  .calendar-heartbeat,
-  .calendar-heartbeat .pixel-icon {
+  .year-sun {
+    width: 28px;
+    height: 28px;
+  }
+  .health-heartbeat,
+  .health-heartbeat .pixel-icon {
     width: 24px;
     height: 24px;
   }
@@ -803,6 +844,10 @@ button:hover {
     gap: 4px;
   }
   .health-stat .pixel-icon {
+    width: 22px;
+    height: 22px;
+  }
+  .mossling-stat-icon {
     width: 22px;
     height: 22px;
   }
@@ -1040,17 +1085,17 @@ button:hover {
 }
 .inspector-eyebrow {
   color: #9dab9f;
-  font-size: 10px;
+  font-size: 12px;
   margin: 0 0 5px;
 }
 .inspector-header h2 {
-  font-size: 20px;
+  font-size: 22px;
   margin: 0;
 }
 .inspector-identity {
   margin: 4px 0 0;
   color: #9dab9f;
-  font-size: 12px;
+  font-size: 14px;
 }
 .inspector-header button.inspector-close {
   display: grid;
@@ -1091,7 +1136,7 @@ button:hover {
 }
 .tile-coordinate {
   color: #9dab9f;
-  font-size: 11px;
+  font-size: 13px;
   margin: 14px 0;
 }
 .inspector-meta-row {
@@ -1122,7 +1167,7 @@ button:hover {
   border: 1px solid #61724b;
   background: #142018;
   color: #e6eecb;
-  font-size: 11px;
+  font-size: 13px;
   cursor: pointer;
 }
 .inspector-action-button:hover {
@@ -1139,7 +1184,6 @@ button:hover {
 .mossling-portrait {
   width: 128px;
   height: 128px;
-  image-rendering: pixelated;
   flex: none;
   border: 8px solid #172c26;
   box-sizing: content-box;
@@ -1147,7 +1191,7 @@ button:hover {
 .mossling-introduction p,
 .terrain-introduction p {
   margin: 0;
-  font-size: 12px;
+  font-size: 15px;
   line-height: 1.65;
 }
 .terrain-portrait {
@@ -1159,18 +1203,18 @@ button:hover {
   image-rendering: pixelated;
 }
 .inspector-content h3 {
-  font-size: 14px;
+  font-size: 16px;
   margin: 0 0 8px;
   color: #e6eecb;
 }
 .inspector-content h3 span {
-  font-size: 10px;
+  font-size: 12px;
   color: #9dab9f;
   font-weight: normal;
 }
 .trait-note {
   color: #9dab9f;
-  font-size: 10px;
+  font-size: 13px;
   line-height: 1.5;
   margin: 0 0 16px;
 }
@@ -1182,7 +1226,7 @@ button:hover {
 .trait label {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: 13px;
   margin-bottom: 5px;
   gap: 6px;
 }
@@ -1193,7 +1237,7 @@ button:hover {
   display: block;
   appearance: none;
   width: 100%;
-  height: 10px;
+  height: 12px;
   background: #20322a;
   border: 0;
   border-radius: 0;
@@ -1202,7 +1246,7 @@ button:hover {
   background: #20322a;
   border: 0;
   border-radius: 0;
-  height: 10px;
+  height: 12px;
 }
 .trait meter::-webkit-meter-optimum-value {
   background: repeating-linear-gradient(
@@ -1227,7 +1271,7 @@ button:hover {
   border: 1px solid var(--border);
 }
 .tile-conditions dt {
-  font-size: 11px;
+  font-size: 13px;
   color: #9dab9f;
 }
 .tile-conditions dd {
@@ -1239,7 +1283,7 @@ button:hover {
     padding: 12px;
   }
   .inspector-header h2 {
-    font-size: 16px;
+    font-size: 18px;
   }
   .inspector-content {
     padding: 0 12px 12px;
@@ -1274,12 +1318,26 @@ button:hover {
 .camera-surface[data-move="true"][data-panning="true"] {
   cursor: grabbing;
 }
+.camera-surface[data-zoom="in"] {
+  cursor: zoom-in;
+}
+.camera-surface[data-zoom="out"] {
+  cursor: zoom-out;
+}
 .god-effects {
   position: absolute;
   inset: 0;
   z-index: 1;
   pointer-events: none;
   image-rendering: pixelated;
+}
+.season-dim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: #071510;
+  opacity: 0;
 }
 .power-placement {
   position: absolute;
@@ -1811,6 +1869,23 @@ button:hover {
   max-width: var(--callout-max-width);
   transform: translateY(-50%);
 }
+.mossling-intro-copy--move {
+  position: fixed;
+  top: auto;
+  right: var(--callout-right);
+  bottom: var(--callout-bottom);
+  width: min(300px, var(--callout-max-width));
+  max-width: var(--callout-max-width);
+  max-height: calc(100vh - var(--callout-bottom) - 16px);
+  overflow-y: auto;
+  transform: none;
+}
+.move-intro {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: auto;
+}
 .mossling-intro-copy h2 {
   margin: 0 0 12px;
   font-size: clamp(20px, 2.4vw, 24px);
@@ -1848,7 +1923,8 @@ button:hover {
   }
   .mossling-intro-copy--mosslings,
   .mossling-intro-copy--species,
-  .mossling-intro-copy--powers {
+  .mossling-intro-copy--powers,
+  .mossling-intro-copy--move {
     top: auto;
     right: 16px;
     bottom: 16px;

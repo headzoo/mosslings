@@ -119,6 +119,7 @@ export class GodWorld {
           ...trait,
         })),
         wontMate: m.wontMate ? [...m.wontMate] : undefined,
+        lastMatedAt: m.lastMatedAt,
         parents: m.parents ? ([...m.parents] as [number, number]) : undefined,
         ritual: m.ritual ? { ...m.ritual } : undefined,
       };
@@ -845,6 +846,7 @@ export class GodWorld {
       colors: [...m.colors],
       traits: m.traits?.map((trait) => ({ ...trait })),
       wontMate: m.wontMate ? [...m.wontMate] : undefined,
+      lastMatedAt: m.lastMatedAt,
       parents: m.parents ? ([...m.parents] as [number, number]) : undefined,
       ritual: m.ritual ? { ...m.ritual } : undefined,
     }));

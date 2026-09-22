@@ -1,7 +1,7 @@
 "use client";
 
 import { type RefObject, useLayoutEffect, useRef } from "react";
-import { foliageAt } from "@/lib/game-time";
+import { foliageAt, YEAR_SECONDS } from "@/lib/game-time";
 import type { MapCell, MapData } from "@/lib/map";
 import {
   iceCover,
@@ -106,7 +106,7 @@ export function TileInspector({
       const { dx, dy } = dragOffsetRef.current;
       dialog.style.left = `${rect.left + rect.width / 2 + dx}px`;
       dialog.style.top = `${rect.top + rect.height / 2 + dy}px`;
-      dialog.style.width = `${Math.max(0, Math.min(420, rect.width - 16))}px`;
+      dialog.style.width = `${Math.max(0, Math.min(460, rect.width - 16))}px`;
       dialog.style.maxHeight = `${Math.max(0, rect.height - 16)}px`;
     };
     position();
@@ -237,6 +237,9 @@ export function TileInspector({
                 {mossling.ritual?.phase === "courtship" && " · Courting"}
                 {mossling.ritual?.phase === "family" &&
                   " · Staying with family"}
+                {mossling.lastMatedAt != null &&
+                  (elapsed?.() ?? 0) < mossling.lastMatedAt + YEAR_SECONDS &&
+                  " · Resting from last mating"}
               </p>
               {mossling.parents && (
                 <p className="tile-coordinate">
@@ -296,7 +299,10 @@ export function TileInspector({
         {mossling ? (
           <>
             <div className="mossling-introduction">
-              <MosslingPortrait mossling={mossling} elapsed={elapsed} />
+              <MosslingPortrait
+                mossling={mossling}
+                elapsed={elapsed ?? (() => 0)}
+              />
               <p>
                 {traits[0].value >= 50
                   ? "A brave little wanderer"

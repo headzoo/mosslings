@@ -166,11 +166,6 @@ const notes = [
     alt: "Two moss creatures stand with a smaller child whose colors are a blend of both.",
   },
   {
-    text: "They raise a family, and then go their separate ways.",
-    image: "/mosslings/lore/parting.png",
-    alt: "A small moss child stands between two larger moss creatures where a woodland path divides.",
-  },
-  {
     text: "A fire, a storm, or a death can pull a pair apart. If they cannot reach each other, the courtship ends and no child is born.",
     image: "/mosslings/lore/wildfire.png",
     alt: "Two moss creatures look toward each other across a small wildfire.",
@@ -194,6 +189,11 @@ const notes = [
     text: "The fields need rain, but soaked ground has its limit. Too much rain in one place turns the land to lasting water.",
     image: "/mosslings/lore/flood.png",
     alt: "A moss creature watches rain pool over a crop field until the ground becomes water.",
+  },
+  {
+    text: "Carrots are a Mossling's favorite food. It is all they grow, and all they eat.",
+    image: "/mosslings/lore/carrots.png",
+    alt: "A content moss creature sits in a garden of ripe orange carrots.",
   },
   {
     text: "They are peaceful, resilient, and not especially bright. That is part of the charm.",

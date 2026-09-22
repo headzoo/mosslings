@@ -57,7 +57,7 @@ function SpeciesSwatch({
     for (let y = 0; y < BADGE; y++) {
       for (let x = 0; x < BADGE; x++) {
         const color = badgeColor(x, y, (sx, sy) =>
-          paintedMosslingColor(healthy, sx, sy, 0),
+          paintedMosslingColor(healthy, sx, sy),
         );
         if (!color) continue;
         context.fillStyle = color;

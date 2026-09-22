@@ -1,12 +1,18 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import {
+  CLOUD_BODY,
+  CLOUD_SHADE,
+  CLOUD_SHADOW,
+  CLOUD_SHADOW_ALPHA,
+  CLOUD_SHADOW_GAP,
+  CLOUD_SHADOW_ROWS,
+} from "@/lib/cloud-visual";
 import type { Camera } from "@/lib/map-camera";
 import { type SkyCloud, skyCloudsAt } from "@/lib/sky-clouds";
+import type { FramePainter } from "./useGodWorld";
 
-const BODY = "#d2e0e4";
-const SHADE = "#889ead";
-const SHADOW = "#102018";
 const cloudSprites = new Map<string, HTMLCanvasElement>();
 
 /** Inclusive column spans as fractions of the cloud width, top to bottom. */
@@ -45,7 +51,7 @@ function stamp(
 /** One pixel per tile, including the shadow pad, reused for every copy of this shape. */
 function cloudSprite(cloud: SkyCloud): HTMLCanvasElement | null {
   if (typeof document === "undefined") return null;
-  const key = `${cloud.silhouette}:${cloud.width}:${cloud.height}`;
+  const key = `${cloud.silhouette}:${cloud.width}:${cloud.height}:g${CLOUD_SHADOW_GAP}`;
   const cached = cloudSprites.get(key);
   if (cached) return cached;
   const shape = SHAPES[cloud.silhouette] ?? SHAPES[0];
@@ -53,21 +59,27 @@ function cloudSprite(cloud: SkyCloud): HTMLCanvasElement | null {
   const pad = 1;
   const canvas = document.createElement("canvas");
   canvas.width = cloud.width + pad * 2;
-  canvas.height = cloud.height + 2;
+  canvas.height = cloud.height + CLOUD_SHADOW_GAP + CLOUD_SHADOW_ROWS;
   const sprite = canvas.getContext("2d");
   if (!sprite) return null;
   const bottom = rows[rows.length - 1];
   const x0 = Math.floor(bottom[0] * cloud.width);
   const x1 = Math.max(x0, Math.ceil(bottom[1] * cloud.width) - 1);
-  for (let row = 1; row <= 2; row++) {
+  for (let row = 1; row <= CLOUD_SHADOW_ROWS; row++) {
     for (let col = x0 - 1; col <= x1 + 1; col++) {
-      stamp(sprite, col + pad, cloud.height - 1 + row, SHADOW, 0.16);
+      stamp(
+        sprite,
+        col + pad,
+        cloud.height - 1 + CLOUD_SHADOW_GAP + row,
+        CLOUD_SHADOW,
+        CLOUD_SHADOW_ALPHA,
+      );
     }
   }
   rows.forEach((span, row) => {
     const left = Math.floor(span[0] * cloud.width);
     const right = Math.max(left, Math.ceil(span[1] * cloud.width) - 1);
-    const color = row === rows.length - 1 ? SHADE : BODY;
+    const color = row === rows.length - 1 ? CLOUD_SHADE : CLOUD_BODY;
     for (let col = left; col <= right; col++)
       stamp(sprite, col + pad, row, color, 0.88);
   });
@@ -104,6 +116,7 @@ export function SkyClouds({
   width,
   height,
   elapsed,
+  subscribeFrame,
 }: {
   seed: number;
   mapWidth: number;
@@ -113,6 +126,7 @@ export function SkyClouds({
   width: number;
   height: number;
   elapsed: () => number;
+  subscribeFrame: (painter: FramePainter) => () => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const elapsedRef = useRef(elapsed);
@@ -122,7 +136,6 @@ export function SkyClouds({
     const context = canvas?.getContext("2d");
     if (!canvas || !context) return;
     context.imageSmoothingEnabled = false;
-    let frame = 0;
     let clear = true;
     const render = () => {
       const camera = cameraRef.current;
@@ -138,19 +151,26 @@ export function SkyClouds({
           context.globalAlpha = 1;
           clear = true;
         }
-        frame = requestAnimationFrame(render);
         return;
       }
       context.clearRect(0, 0, canvas.width, canvas.height);
       clear = false;
+      clouds.sort((a, b) => a.y - b.y || a.x - b.x);
       for (const cloud of clouds)
         drawCloud(context, camera, tileSize, width, height, cloud);
       context.globalAlpha = 1;
-      frame = requestAnimationFrame(render);
     };
-    render();
-    return () => cancelAnimationFrame(frame);
-  }, [seed, mapWidth, mapHeight, cameraRef, tileSize, width, height]);
+    return subscribeFrame(render);
+  }, [
+    seed,
+    mapWidth,
+    mapHeight,
+    cameraRef,
+    subscribeFrame,
+    tileSize,
+    width,
+    height,
+  ]);
   return (
     <canvas
       ref={ref}

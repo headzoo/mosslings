@@ -372,6 +372,7 @@ test("winter clouds drop snow and warmer clouds drop rain", () => {
     },
   });
   assert.ok(snow.has("#f7fbff"));
+  assert.ok(snow.has("#102018"));
   assert.equal(snow.has("#56b9ff"), false);
 
   const summer = new GodWorld(fixture(12, 12), []);
@@ -386,6 +387,7 @@ test("winter clouds drop snow and warmer clouds drop rain", () => {
     },
   });
   assert.ok(rain.has("#56b9ff"));
+  assert.ok(rain.has("#102018"));
   assert.equal(rain.has("#f7fbff"), false);
 });
 test("rain still stops when sixteen powers are already active", () => {

@@ -1,12 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { provisionCrops } from "../lib/crops";
-import { MONTH_SECONDS } from "../lib/game-time";
+import { MONTH_SECONDS, YEAR_SECONDS } from "../lib/game-time";
 import { GodWorld } from "../lib/god/engine";
 import { mateMonth } from "../lib/god/mating";
 import type { MapData } from "../lib/map";
-import type { PreviewMossling } from "../lib/map-preview";
-import { pulseRgb } from "../lib/map-preview";
+import { type PreviewMossling, paintedMosslingColor } from "../lib/map-preview";
 import {
   approachRadius,
   blendTraits,
@@ -46,6 +45,7 @@ function step(
   width: number,
   height: number,
   random: () => number = () => 0,
+  elapsed: number = MONTH_SECONDS,
 ) {
   const occupied = new Set(mosslings.map((mossling) => mossling.cellIndex));
   let next = Math.max(-1, ...mosslings.map((mossling) => mossling.id)) + 1;
@@ -53,7 +53,7 @@ function step(
     mosslings,
     width,
     height,
-    elapsed: MONTH_SECONDS,
+    elapsed,
     random,
     isPanicked: () => false,
     canMoveTo: (_mossling, x, y) => {
@@ -234,6 +234,47 @@ test("courtship holds for 3 months, bears a blended child on the 4th, then the t
   assert.equal(child.ritual, undefined);
 });
 
+test("parents wait a year after family dispersal before courting again", () => {
+  const parentA = creature(1, 2, 2, 7, brave);
+  const parentB = creature(2, 3, 2, 7, brave);
+  const family = [parentA, parentB];
+  for (let month = 1; month <= 5; month++) {
+    step(family, 7, 7, () => 0, month * MONTH_SECONDS);
+  }
+  assert.equal(parentA.lastMatedAt, MONTH_SECONDS * 5);
+  assert.equal(parentB.lastMatedAt, MONTH_SECONDS * 5);
+
+  const child = family.find((mossling) => mossling.parents);
+  if (child) child.cellIndex = 0;
+
+  const suitor = creature(4, 1, 2, 7, brave);
+  family.push(suitor);
+  step(family, 7, 7, () => 0, parentA.lastMatedAt! + MONTH_SECONDS);
+  assert.equal(parentA.ritual, undefined);
+
+  step(family, 7, 7, () => 0, parentA.lastMatedAt! + YEAR_SECONDS);
+  assert.equal(parentA.ritual?.phase, "courtship");
+  assert.equal(parentA.ritual?.partnerId, 4);
+});
+
+test("a cancelled courtship does not start the year-long mating cooldown", () => {
+  const survivor = creature(1, 0, 0, 8, brave);
+  const lost = creature(2, 1, 0, 8, brave);
+  const pair = [survivor, lost];
+  step(pair, 8, 3, () => 0, MONTH_SECONDS);
+  assert.equal(survivor.ritual?.phase, "courtship");
+  lost.health = 0;
+  step(pair, 8, 3, () => 0, MONTH_SECONDS * 2);
+  assert.equal(survivor.ritual, undefined);
+  assert.equal(survivor.lastMatedAt, undefined);
+
+  const suitor = creature(3, 1, 0, 8, brave);
+  pair.push(suitor);
+  step(pair, 8, 3, () => 0, MONTH_SECONDS * 3);
+  assert.equal(survivor.ritual?.phase, "courtship");
+  assert.equal(survivor.ritual?.partnerId, 3);
+});
+
 test("a partner's death cancels the courtship before a child is born", () => {
   const parentA = creature(1, 2, 2, 7, brave);
   const parentB = creature(2, 3, 2, 7, brave);
@@ -369,7 +410,7 @@ test("the played world keeps a courting pair still, then separates the family fo
   assert.equal(doomed.mosslings.length, 1);
 });
 
-test("courting colors pulse together from the shared start time", () => {
+test("courting colors stay the same as a Mossling at rest", () => {
   const shared = {
     partnerId: 2,
     months: 1,
@@ -379,22 +420,22 @@ test("courting colors pulse together from the shared start time", () => {
   const mossling: PreviewMossling = {
     id: 1,
     cellIndex: 0,
-    colors: ["#000000"],
+    colors: ["#336699", "#88aa44", "#eedd88"],
     pattern: 0,
     ritual: shared,
   };
-  assert.deepEqual(pulseRgb([0, 0, 0], mossling, 0), [0, 0, 0]);
-  assert.deepEqual(
-    pulseRgb([0, 0, 0], mossling, MONTH_SECONDS / 4),
-    [46, 46, 46],
-  );
   const partner: PreviewMossling = {
     ...mossling,
     id: 2,
     ritual: { ...shared, partnerId: 1 },
   };
-  assert.deepEqual(
-    pulseRgb([0, 0, 0], partner, MONTH_SECONDS / 4),
-    pulseRgb([0, 0, 0], mossling, MONTH_SECONDS / 4),
+  const resting: PreviewMossling = { ...mossling, ritual: undefined };
+  assert.equal(
+    paintedMosslingColor(mossling, 3, 3),
+    paintedMosslingColor(partner, 3, 3),
+  );
+  assert.equal(
+    paintedMosslingColor(mossling, 3, 3),
+    paintedMosslingColor(resting, 3, 3),
   );
 });

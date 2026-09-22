@@ -2,6 +2,7 @@
 import { useEffect, useRef } from "react";
 import type { GodWorld } from "@/lib/god/engine";
 import type { Camera } from "@/lib/map-camera";
+import type { FramePainter } from "./useGodWorld";
 
 export function GodEffects({
   engine,
@@ -9,19 +10,20 @@ export function GodEffects({
   tileSize,
   width,
   height,
+  subscribeFrame,
 }: {
   engine: GodWorld;
   cameraRef: { current: Camera | null };
   tileSize: number;
   width: number;
   height: number;
+  subscribeFrame: (painter: FramePainter) => () => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = ref.current;
     const context = canvas?.getContext("2d");
     if (!canvas || !context) return;
-    let frame = 0;
     let clear = true;
     const render = () => {
       const camera = cameraRef.current;
@@ -30,7 +32,6 @@ export function GodEffects({
           context.clearRect(0, 0, canvas.width, canvas.height);
           clear = true;
         }
-        frame = requestAnimationFrame(render);
         return;
       }
       context.clearRect(0, 0, canvas.width, canvas.height);
@@ -61,11 +62,9 @@ export function GodEffects({
         },
       });
       context.globalAlpha = 1;
-      frame = requestAnimationFrame(render);
     };
-    render();
-    return () => cancelAnimationFrame(frame);
-  }, [engine, cameraRef, tileSize, width, height]);
+    return subscribeFrame(render);
+  }, [engine, cameraRef, subscribeFrame, tileSize, width, height]);
   return (
     <canvas
       ref={ref}

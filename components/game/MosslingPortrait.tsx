@@ -3,58 +3,92 @@
 import { useEffect, useRef, useState } from "react";
 import type { PreviewMossling } from "@/lib/map-preview";
 import {
-  loadPortraitBase,
+  loadPortraitBackdrop,
+  loadPortraitFrames,
+  PORTRAIT_FRAME_COUNT,
   PORTRAIT_SIZE,
+  portraitBounceFrame,
+  portraitLookKey,
   skinPortrait,
 } from "@/lib/mossling-portrait";
 
 export function MosslingPortrait({
   mossling,
-  elapsed,
+  elapsed = () => 0,
 }: {
   mossling: PreviewMossling;
   elapsed?: () => number;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const mosslingRef = useRef(mossling);
   const elapsedRef = useRef(elapsed);
-  mosslingRef.current = mossling;
+  const mosslingRef = useRef(mossling);
   elapsedRef.current = elapsed;
+  mosslingRef.current = mossling;
   const [failed, setFailed] = useState(false);
+  const look = portraitLookKey(mossling);
   useEffect(() => {
-    let frame = 0;
     let cancelled = false;
-    let base: ImageData | undefined;
-    const paint = () => {
-      if (!base || !ref.current) return;
-      ref.current
-        .getContext("2d")
-        ?.putImageData(
-          skinPortrait(base, mosslingRef.current, elapsedRef.current?.() ?? 0),
-          0,
-          0,
-        );
-    };
-    loadPortraitBase()
-      .then((image) => {
-        if (cancelled) return;
-        base = image;
-        paint();
-        if (!mossling.ritual) return;
-        const loop = () => {
-          paint();
-          frame = requestAnimationFrame(loop);
+    let raf = 0;
+    Promise.all([
+      loadPortraitFrames(),
+      loadPortraitBackdrop().catch(() => null),
+    ])
+      .then(([frames, backdrop]) => {
+        if (cancelled || !ref.current) return;
+        if (portraitLookKey(mosslingRef.current) !== look) return;
+        const context = ref.current.getContext("2d");
+        if (!context) return;
+        const sheet = document.createElement("canvas");
+        sheet.width = PORTRAIT_SIZE;
+        sheet.height = PORTRAIT_SIZE * PORTRAIT_FRAME_COUNT;
+        const sprite = sheet.getContext("2d");
+        if (!sprite) return;
+        const current = mosslingRef.current;
+        for (let frame = 0; frame < frames.length; frame++) {
+          const image = frames[frame];
+          if (!image) continue;
+          sprite.putImageData(
+            skinPortrait(image, current),
+            0,
+            frame * PORTRAIT_SIZE,
+          );
+        }
+        const render = () => {
+          const shown = mosslingRef.current;
+          const bounce = portraitBounceFrame(
+            shown.id,
+            elapsedRef.current(),
+            shown.health ?? 100,
+          );
+          context.imageSmoothingEnabled = true;
+          if (backdrop) {
+            context.drawImage(backdrop, 0, 0, PORTRAIT_SIZE, PORTRAIT_SIZE);
+          } else {
+            context.clearRect(0, 0, PORTRAIT_SIZE, PORTRAIT_SIZE);
+          }
+          context.drawImage(
+            sheet,
+            0,
+            bounce * PORTRAIT_SIZE,
+            PORTRAIT_SIZE,
+            PORTRAIT_SIZE,
+            0,
+            0,
+            PORTRAIT_SIZE,
+            PORTRAIT_SIZE,
+          );
+          raf = requestAnimationFrame(render);
         };
-        frame = requestAnimationFrame(loop);
+        render();
       })
       .catch(() => {
         if (!cancelled) setFailed(true);
       });
     return () => {
       cancelled = true;
-      cancelAnimationFrame(frame);
+      cancelAnimationFrame(raf);
     };
-  }, [mossling]);
+  }, [look]);
   if (failed)
     return <span className="mossling-portrait">Portrait unavailable</span>;
   return (

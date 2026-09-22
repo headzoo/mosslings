@@ -6,6 +6,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 export const WELCOME_PREFERENCE = "mosslings:hide-welcome";
 export const INTRO_PREFERENCE = "mosslings:hide-intro";
 export const CROPS_INTRO_PREFERENCE = "mosslings:hide-crops-intro";
+export const MOVE_INTRO_PREFERENCE = "mosslings:hide-move-intro";
 
 function clearStoredPreference(key: string) {
   localStorage.removeItem(key);
@@ -51,10 +52,27 @@ export function forgetCropIntroDismissal() {
   clearStoredPreference(CROPS_INTRO_PREFERENCE);
 }
 
+export function isMoveIntroDismissed() {
+  try {
+    return localStorage.getItem(MOVE_INTRO_PREFERENCE) === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function rememberMoveIntroDismissal() {
+  localStorage.setItem(MOVE_INTRO_PREFERENCE, "true");
+}
+
+export function forgetMoveIntroDismissal() {
+  clearStoredPreference(MOVE_INTRO_PREFERENCE);
+}
+
 export function forgetWelcomeDismissal() {
   clearStoredPreference(WELCOME_PREFERENCE);
   forgetIntroDismissal();
   forgetCropIntroDismissal();
+  forgetMoveIntroDismissal();
 }
 
 export function WelcomeSplash({

@@ -1,0 +1,9 @@
+Use case: one character painting, warped in code into a bounce. Style reference: public/mosslings/welcome-woodland-varied.webp. Gentle watercolor/gouache moss ball, tiny black eyes, tiny feet, fuzzy texture, one solid body. Grayscale only so the portrait renderer can lay genetic color over it. Soft painted fringe, transparent background.
+
+The runtime strip is not 15 separate drawings. One master pose is scaled and lifted through a hop so the face stays attached:
+settle, squash, launch, peak, fall, land, back to settle, sampled at 15 even steps.
+Width and height stay inverse. The feet stay planted on the squash and the landing. The body lifts on the way up.
+
+Generated with the built-in imagegen tool, then soft-matted and LANCZOS warped.
+Runtime asset: public/mosslings/portrait-bounce-v1.png (256×3840 vertical strip, one 256×256 cell per frame).
+Neutral grayscale shading and the soft silhouette are retained; individual colors and patterns are applied per frame.

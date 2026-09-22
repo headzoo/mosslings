@@ -8,6 +8,7 @@ import {
   MONTH_SECONDS,
   nextFastForwardStep,
   nextSpringAt,
+  seasonDimAt,
   SEASON_SECONDS,
   timeRateAt,
 } from "../lib/game-time";
@@ -86,6 +87,18 @@ test("foliage repaint steps advance four times a season and wrap with the year",
   assert.equal(foliageStep(SEASON_SECONDS / 4), 1);
   assert.equal(foliageStep(SEASON_SECONDS), 4);
   assert.equal(foliageStep(SEASON_SECONDS * 4), 0);
+});
+
+test("board dim eases in through autumn and winter and clears by mid-spring", () => {
+  const midAutumn = seasonDimAt(SEASON_SECONDS + SEASON_SECONDS / 2);
+  const midWinter = seasonDimAt(SEASON_SECONDS * 2 + SEASON_SECONDS / 2);
+  const midSpring = seasonDimAt(SEASON_SECONDS * 3 + SEASON_SECONDS / 2);
+
+  assert.equal(seasonDimAt(0), 0);
+  assert.ok(midAutumn > 0);
+  assert.ok(midWinter >= 0.12);
+  assert.ok(midWinter > midAutumn);
+  assert.equal(midSpring, 0);
 });
 
 test("fast forward rises by one eighth to three times then wraps", () => {

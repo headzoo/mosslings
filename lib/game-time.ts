@@ -131,6 +131,21 @@ export function foliageAt(elapsedSeconds: number): SeasonLook {
   }
 }
 
+/** Subtle board dim during autumn and winter. 0 is full brightness. */
+export function seasonDimAt(elapsedSeconds: number): number {
+  const { season, into } = yearProgress(elapsedSeconds);
+  switch (season) {
+    case "Summer":
+      return 0;
+    case "Autumn":
+      return into * 0.12;
+    case "Winter":
+      return 0.12 + into * 0.03;
+    case "Spring":
+      return into < 0.35 ? (1 - into / 0.35) * 0.12 : 0;
+  }
+}
+
 export function foliageStep(elapsedSeconds: number): number {
   const { within } = yearProgress(elapsedSeconds);
   const span = SEASON_SECONDS / FOLIAGE_STEPS;

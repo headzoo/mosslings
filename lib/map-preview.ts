@@ -1,4 +1,4 @@
-import { foliageAt, MONTH_SECONDS, type SeasonLook } from "./game-time";
+import { foliageAt, type SeasonLook } from "./game-time";
 
 export type { SeasonLook } from "./game-time";
 
@@ -7,6 +7,17 @@ import type { MapCell, MapData } from "./map";
 import { brownBlend, mixHex } from "./vegetation";
 
 export const TILE_SIZE = 8;
+
+/** True for pixels inside the round Mossling body on an 8×8 tile. */
+export function inMosslingCircle(
+  x: number,
+  y: number,
+  size = TILE_SIZE,
+): boolean {
+  const dx = x + 0.5 - size / 2;
+  const dy = y + 0.5 - size / 2;
+  return Math.hypot(dx, dy) <= size / 2 - 0.35;
+}
 
 export function getGridDimensions(width: number, height: number) {
   return {
@@ -44,6 +55,8 @@ export interface PreviewMossling {
   parents?: [number, number];
   /** Mossling ids this one will not court again. */
   wontMate?: number[];
+  /** Game seconds when this mossling last finished a successful mating cycle. */
+  lastMatedAt?: number;
   ritual?: MatingRitual;
 }
 
@@ -383,44 +396,13 @@ export function paintedMosslingColor(
   mossling: PreviewMossling,
   x: number,
   y: number,
-  elapsed = 0,
 ) {
   if ((mossling.health ?? 100) <= 0)
     return x === y || x + y === TILE_SIZE - 1 ? "#e54320" : "#000000";
   const months = mossling.plagueMonths;
   const color = mosslingPatternColor(mossling, x, y);
-  if (months === undefined) return pulseHex(color, mossling, elapsed);
+  if (months === undefined) return color;
   return scaleHex(color, plagueShade(months));
-}
-
-/** One bright-and-dim cycle per month, shared by everyone in the ritual. */
-export function pulseRgb(
-  channels: number[],
-  mossling: PreviewMossling,
-  elapsed: number,
-) {
-  const ritual = mossling.ritual;
-  if (!ritual) return channels;
-  const wave = Math.sin(
-    (2 * Math.PI * (elapsed - ritual.since)) / MONTH_SECONDS,
-  );
-  const amount = Math.abs(wave) * 0.18;
-  const target = wave > 0 ? 255 : 0;
-  return channels.map((channel) =>
-    Math.round(channel + (target - channel) * amount),
-  );
-}
-
-function pulseHex(hex: string, mossling: PreviewMossling, elapsed: number) {
-  if (!mossling.ritual) return hex;
-  const value = Number.parseInt(hex.slice(1), 16);
-  if (!Number.isFinite(value)) return hex;
-  const pulsed = pulseRgb(
-    [16, 8, 0].map((shift) => (value >> shift) & 255),
-    mossling,
-    elapsed,
-  );
-  return `#${pulsed.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
 }
 
 function paintTree(
@@ -697,26 +679,14 @@ export function paintCell(
 }
 
 const SPRITE_LIMIT = 256;
-const PULSE_STEPS = 8;
 const sprites = new Map<string, HTMLCanvasElement>();
 
-function pulseBucket(mossling: PreviewMossling, elapsed: number): number {
-  const ritual = mossling.ritual;
-  if (!ritual || (mossling.health ?? 100) <= 0) return 0;
-  const wave = Math.sin(
-    (2 * Math.PI * (elapsed - ritual.since)) / MONTH_SECONDS,
-  );
-  return Math.round(wave * PULSE_STEPS);
-}
-
-function spriteKey(mossling: PreviewMossling, elapsed: number): string {
+function spriteKey(mossling: PreviewMossling): string {
   if ((mossling.health ?? 100) <= 0) return "dead";
   return [
     mossling.pattern,
     mossling.colors.join("."),
     mossling.plagueMonths ?? "",
-    mossling.ritual?.since ?? "",
-    pulseBucket(mossling, elapsed),
   ].join("|");
 }
 
@@ -729,13 +699,10 @@ function hexPixel(data: Uint8ClampedArray, x: number, y: number, hex: string) {
   data[index + 3] = 255;
 }
 
-/** One 8×8 blit for a look. Courting colors share a sprite across nearby frames. */
-function mosslingSprite(
-  mossling: PreviewMossling,
-  elapsed: number,
-): HTMLCanvasElement | null {
+/** One 8×8 blit for a look. Matching colors and patterns share a sprite. */
+function mosslingSprite(mossling: PreviewMossling): HTMLCanvasElement | null {
   if (typeof document === "undefined") return null;
-  const key = spriteKey(mossling, elapsed);
+  const key = spriteKey(mossling);
   const cached = sprites.get(key);
   if (cached) return cached;
   const canvas = document.createElement("canvas");
@@ -746,7 +713,8 @@ function mosslingSprite(
   const image = sprite.createImageData(TILE_SIZE, TILE_SIZE);
   for (let y = 0; y < TILE_SIZE; y++) {
     for (let x = 0; x < TILE_SIZE; x++) {
-      hexPixel(image.data, x, y, paintedMosslingColor(mossling, x, y, elapsed));
+      if (!inMosslingCircle(x, y)) continue;
+      hexPixel(image.data, x, y, paintedMosslingColor(mossling, x, y));
     }
   }
   sprite.putImageData(image, 0, 0);
@@ -763,22 +731,21 @@ export function paintMossling(
   map: Pick<MapData, "width">,
   mossling: PreviewMossling,
   tileSize = TILE_SIZE,
-  elapsed = 0,
 ) {
   const left = (mossling.cellIndex % map.width) * tileSize;
   const top = Math.floor(mossling.cellIndex / map.width) * tileSize;
   if (tileSize === 1) {
-    context.fillStyle = paintedMosslingColor(mossling, 0, 0, elapsed);
+    context.fillStyle = paintedMosslingColor(mossling, 0, 0);
     context.fillRect(left, top, 1, 1);
     return;
   }
-  const sprite =
-    tileSize === TILE_SIZE ? mosslingSprite(mossling, elapsed) : null;
+  const sprite = tileSize === TILE_SIZE ? mosslingSprite(mossling) : null;
   if (sprite) context.drawImage(sprite, left, top);
   else {
     for (let y = 0; y < TILE_SIZE; y++) {
       for (let x = 0; x < TILE_SIZE; x++) {
-        context.fillStyle = paintedMosslingColor(mossling, x, y, elapsed);
+        if (!inMosslingCircle(x, y)) continue;
+        context.fillStyle = paintedMosslingColor(mossling, x, y);
         context.fillRect(left + x, top + y, 1, 1);
       }
     }
@@ -804,5 +771,5 @@ export function paintMap(
   for (let index = 0; index < map.cells.length; index++)
     paintCell(context, map, index, tileSize, look);
   for (const mossling of mosslings)
-    paintMossling(context, map, mossling, tileSize, elapsed);
+    paintMossling(context, map, mossling, tileSize);
 }

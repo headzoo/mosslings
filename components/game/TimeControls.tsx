@@ -1,7 +1,8 @@
-import { type CSSProperties, useState } from "react";
-import { MONTH_SECONDS, type Season } from "@/lib/game-time";
+import { useState } from "react";
+import type { Season } from "@/lib/game-time";
 import { HelpModal } from "./HelpModal";
 import { HudIcon } from "./HudIcon";
+import { SeasonSun } from "./SeasonSun";
 import { useMusic } from "./useMusic";
 
 const SEASON_SUN: Record<Season, string> = {
@@ -14,46 +15,22 @@ const SEASON_SUN: Record<Season, string> = {
 export function seasonSunIcon(season: Season): string {
   return SEASON_SUN[season];
 }
-export function CalendarHeartbeat({
-  rate = 1,
-  isPlaying = true,
-}: {
-  rate?: number;
-  isPlaying?: boolean;
-}) {
-  const heartbeatStyle = {
-    "--heartbeat-duration": `${MONTH_SECONDS / rate}s`,
-  } as CSSProperties;
-  return (
-    <div
-      className="calendar-heartbeat"
-      data-playing={isPlaying}
-      style={heartbeatStyle}
-      aria-hidden="true"
-    >
-      <HudIcon src="/mosslings/icons/heart.png" />
-    </div>
-  );
-}
 export function Year({
   year = 1,
   season = "Summer",
-  rate = 1,
-  isPlaying = true,
+  elapsed = () => 0,
 }: {
   year?: number;
   season?: Season;
-  rate?: number;
-  isPlaying?: boolean;
+  elapsed?: () => number;
 }) {
   return (
     <div className="year panel">
-      <HudIcon src={seasonSunIcon(season)} />
+      <SeasonSun season={season} elapsed={elapsed} />
       <div className="year-date">
         <span>Year {year}</span>
         <span>{season}</span>
       </div>
-      <CalendarHeartbeat rate={rate} isPlaying={isPlaying} />
     </div>
   );
 }

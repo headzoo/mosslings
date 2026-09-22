@@ -1,25 +1,67 @@
+import type { Ref } from "react";
+
+export type MapTool = "pointer" | "move" | "zoom-in" | "zoom-out";
+
+function Magnifier({ sign }: { sign: "+" | "-" }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="10" cy="10" r="6" />
+      <path d="m15.5 15.5 5 5" />
+      {sign === "+" ? <path d="M10 7.5v5M7.5 10h5" /> : <path d="M7.5 10h5" />}
+    </svg>
+  );
+}
+
 export function ZoomControls({
+  ref,
   tileSize,
   ready,
-  moveMode,
-  onToggleMove,
-  onZoom,
+  tool,
+  onSelectTool,
 }: {
+  ref?: Ref<HTMLFieldSetElement>;
   tileSize: number;
   ready: boolean;
-  moveMode: boolean;
-  onToggleMove: () => void;
-  onZoom: (direction: number) => void;
+  tool: MapTool;
+  onSelectTool: (tool: MapTool) => void;
 }) {
   return (
-    <fieldset className="zoom-controls" aria-label="Map view">
+    <fieldset ref={ref} className="zoom-controls" aria-label="Map view">
+      <button
+        type="button"
+        aria-label="Inspect map"
+        title="Inspect map"
+        aria-pressed={tool === "pointer"}
+        disabled={!ready}
+        onClick={() => onSelectTool("pointer")}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M4 4l7 16 2.5-6.5L20 11 4 4z" />
+        </svg>
+      </button>
       <button
         type="button"
         aria-label="Move map"
         title="Move map"
-        aria-pressed={moveMode}
+        aria-pressed={tool === "move"}
         disabled={!ready || tileSize <= 8}
-        onClick={onToggleMove}
+        onClick={() => onSelectTool("move")}
       >
         <svg
           viewBox="0 0 24 24"
@@ -40,35 +82,21 @@ export function ZoomControls({
         type="button"
         aria-label="Zoom out"
         title="Zoom out"
+        aria-pressed={tool === "zoom-out"}
         disabled={!ready || tileSize === 8}
-        onClick={() => onZoom(-1)}
+        onClick={() => onSelectTool("zoom-out")}
       >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          aria-hidden="true"
-        >
-          <path d="M5 12h14" />
-        </svg>
+        <Magnifier sign="-" />
       </button>
       <button
         type="button"
         aria-label="Zoom in"
         title="Zoom in"
+        aria-pressed={tool === "zoom-in"}
         disabled={!ready || tileSize === 32}
-        onClick={() => onZoom(1)}
+        onClick={() => onSelectTool("zoom-in")}
       >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          aria-hidden="true"
-        >
-          <path d="M5 12h14M12 5v14" />
-        </svg>
+        <Magnifier sign="+" />
       </button>
     </fieldset>
   );

@@ -1,0 +1,4 @@
+Use case: square backdrop behind the modal Mossling. Style reference: public/mosslings/welcome-woodland-varied.webp. A close watercolor/gouache crop of that woodland: mossy log, ferns, tiny flowers, warm cream light, olive and forest green, a hint of stone. The center of the log stays open for the bouncing portrait. No creatures, no text.
+
+Generated with the built-in imagegen tool, then LANCZOS packed to 256×256.
+Runtime asset: public/mosslings/portrait-backdrop-v1.png

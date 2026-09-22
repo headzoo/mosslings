@@ -6,6 +6,8 @@ import type { PowerId } from "@/lib/god/types";
 import type { MapData } from "@/lib/map";
 import type { PreviewMossling } from "@/lib/map-preview";
 
+export type FramePainter = (now: number) => void;
+
 export function useGodWorld(
   map: MapData | null,
   mosslings: PreviewMossling[],
@@ -16,6 +18,13 @@ export function useGodWorld(
   const [snapshot, setSnapshot] = useState<WorldView | null>(null);
   const revisionRef = useRef(0);
   const dirtyRef = useRef(false);
+  const paintersRef = useRef(new Set<FramePainter>());
+  const subscribeFrame = useCallback((painter: FramePainter) => {
+    paintersRef.current.add(painter);
+    return () => {
+      paintersRef.current.delete(painter);
+    };
+  }, []);
   useEffect(() => {
     if (!map) return;
     const world = new GodWorld(map, mosslings, getDate);
@@ -27,6 +36,7 @@ export function useGodWorld(
       last = performance.now(),
       sincePublish = 0;
     const animate = (now: number) => {
+      frame = requestAnimationFrame(animate);
       const elapsed = Math.min(0.25, (now - last) / 1000);
       last = now;
       if (world.advanceTo(getElapsed())) dirtyRef.current = true;
@@ -37,7 +47,7 @@ export function useGodWorld(
         sincePublish = 0;
         dirtyRef.current = false;
       }
-      frame = requestAnimationFrame(animate);
+      for (const painter of paintersRef.current) painter(now);
     };
     frame = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(frame);
@@ -81,6 +91,7 @@ export function useGodWorld(
     moveMossling,
     cloneMossling,
     revisionRef,
+    subscribeFrame,
     map: engine?.map ?? map,
     mosslings: snapshot?.mosslings ?? mosslings,
     events: snapshot?.events ?? [],

@@ -1,3 +1,4 @@
+import { YEAR_SECONDS } from "../game-time";
 import type { PreviewMossling } from "../map-preview";
 import { approachRadius, blendTraits, matingChance } from "../mossling-traits";
 import { addToBucket, eachInReach } from "./shared";
@@ -29,6 +30,13 @@ const rejects = (mossling: PreviewMossling, id: number) =>
 
 function forbid(mossling: PreviewMossling, ...ids: number[]) {
   mossling.wontMate = [...new Set([...(mossling.wontMate ?? []), ...ids])];
+}
+
+function onMatingCooldown(mossling: PreviewMossling, elapsed: number) {
+  return (
+    mossling.lastMatedAt != null &&
+    elapsed < mossling.lastMatedAt + YEAR_SECONDS
+  );
 }
 
 function chebyshev(a: { x: number; y: number }, b: { x: number; y: number }) {
@@ -145,6 +153,8 @@ export function mateMonth(input: MateMonthInput): MateMonthResult {
       clearRitual(child);
       clearRitual(mossling);
       clearRitual(partner);
+      mossling.lastMatedAt = elapsed;
+      partner.lastMatedAt = elapsed;
       continue;
     }
     if (apart !== 1) {
@@ -233,7 +243,10 @@ export function mateMonth(input: MateMonthInput): MateMonthResult {
 
   const free = mosslings.filter(
     (mossling) =>
-      alive(mossling) && !mossling.ritual && !isPanicked(mossling.id),
+      alive(mossling) &&
+      !mossling.ritual &&
+      !isPanicked(mossling.id) &&
+      !onMatingCooldown(mossling, elapsed),
   );
   const at = new Map(
     free.map((mossling) => [mossling.id, pos(mossling.cellIndex, width)]),

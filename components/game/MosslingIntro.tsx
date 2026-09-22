@@ -143,7 +143,7 @@ export function MosslingIntro({
           <>
             <h2 id="mossling-intro-mosslings-title">These are Mosslings.</h2>
             <p>
-              These 8x8 colorful little squares are your Mosslings. They come in
+              These 8x8 colorful little circles are your Mosslings. They come in
               all different colors based on their genetics — patterns, shades,
               and traits passed down from their parents.
               <br />

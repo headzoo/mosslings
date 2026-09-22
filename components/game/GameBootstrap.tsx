@@ -101,7 +101,7 @@ export function GameBootstrap() {
         map={world?.map ?? null}
         mosslings={world?.mosslings ?? EMPTY_MOSSLINGS}
         boardRef={boardRef}
-        suspended={showWelcome !== false || introPhase !== null || !world}
+        suspended={showWelcome !== false || !world}
         introPhase={world ? introPhase : null}
         onIntroContinue={() =>
           setIntroPhase((phase) => {
