@@ -3,6 +3,9 @@ import test from "node:test";
 import { provisionCrops } from "../lib/crops";
 import { MONTH_SECONDS, YEAR_SECONDS } from "../lib/game-time";
 import {
+  sampleFromResources,
+} from "../lib/resource-history";
+import {
   FOREST_SPREAD_MOISTURE,
   FOREST_SPREAD_SECONDS,
   plantStarterForests,
@@ -119,7 +122,7 @@ test("catastrophe repairs restore original forest and terrain after two years, n
   assert.equal(world.snapshot().resources.mosslings, 0);
   assert.equal(world.map.cells[111].tree, undefined);
   assert.equal(world.map.cells[113].terrain, "dirt");
-  assert.equal(world.snapshot().resources.stone, 0);
+  assert.ok(world.snapshot().resources.destroyed > 0);
   world.advanceTo(48);
   assert.ok((world.map.cells[111].recovery ?? 0) > 0.4);
   assert.equal(world.map.cells[111].tree, undefined);
@@ -129,7 +132,6 @@ test("catastrophe repairs restore original forest and terrain after two years, n
   assert.equal(world.map.cells[113].damage, undefined);
   assert.equal(world.map.cells[113].elevation, map.cells[113].elevation);
   assert.equal(world.snapshot().resources.trees, before.trees);
-  assert.equal(world.snapshot().resources.stone, before.stone);
   assert.equal(world.mosslings.length, 0);
   assert.equal(
     world.events.find((e) => e.message.includes("recovered"))?.year,
@@ -239,18 +241,36 @@ test("resource totals are derived from live tile data and living population", ()
   map.cells[4].damage = "burned";
   const world = new GodWorld(map, [mossling(5)]);
   assert.deepEqual(world.snapshot().resources, {
+    born: 0,
     mosslings: 1,
     killed: 0,
     food: 0,
     health: 100,
     trees: 2,
-    stone: 1,
-    water: 1,
+    destroyed: 1,
   });
   world.cast("raze", 2, 0);
   assert.equal(world.snapshot().resources.trees, 1);
-  assert.equal(world.snapshot().resources.water, 1);
-  assert.equal(world.snapshot().resources.stone, 1);
+  assert.equal(world.snapshot().resources.destroyed, 1);
+});
+
+test("destroyed counts damaged and burning tiles without double-counting", () => {
+  const map = fixture(2, 2);
+  assert.deepEqual(countWorldResources(map, []), {
+    born: 0,
+    mosslings: 0,
+    killed: 0,
+    food: 0,
+    trees: 0,
+    destroyed: 0,
+    health: 0,
+  });
+  map.cells[0].damage = "cracked";
+  assert.equal(countWorldResources(map, []).destroyed, 1);
+  map.cells[1].burning = true;
+  assert.equal(countWorldResources(map, []).destroyed, 2);
+  map.cells[0].burning = true;
+  assert.equal(countWorldResources(map, []).destroyed, 2);
 });
 
 test("all destructive powers repair their damage on the game calendar", () => {
@@ -277,4 +297,26 @@ test("all destructive powers repair their damage on the game calendar", () => {
     )
       assert.equal(cell.tree?.health, 100, power);
   }
+});
+
+test("resource history grows on monthly ticks and matches the latest snapshot", () => {
+  const world = new GodWorld(fixture(), [mossling(112)]);
+  const initial = world.snapshot();
+  assert.equal(initial.resourceHistory.length, 1);
+  assert.deepEqual(
+    initial.resourceHistory[0],
+    sampleFromResources(initial.resources),
+  );
+
+  world.advanceTo(MONTH_SECONDS);
+  const afterOneMonth = world.snapshot();
+  assert.equal(afterOneMonth.resourceHistory.length, 2);
+  assert.deepEqual(
+    afterOneMonth.resourceHistory.at(-1),
+    sampleFromResources(afterOneMonth.resources),
+  );
+
+  world.advanceTo(3 * MONTH_SECONDS);
+  const afterThreeMonths = world.snapshot();
+  assert.equal(afterThreeMonths.resourceHistory.length, 4);
 });

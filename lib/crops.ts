@@ -1,4 +1,3 @@
-import type { Season } from "./game-time";
 import type { MapCell, MapData } from "./map";
 import { type TraitReading, traitValue } from "./mossling-traits";
 
@@ -33,24 +32,25 @@ export function appetite(traits: readonly TraitReading[] | undefined): number {
   return 0.55 + ((metabolism + drive) / 200) * 0.9;
 }
 
-export function ripeTiles(map: MapData, season: Season = "Summer"): number {
-  if (season === "Winter") return 0;
-  let count = 0;
-  for (const cell of map.cells) if (isRipe(cell)) count++;
-  return count;
-}
-
-export function isRipe(cell: MapCell): boolean {
-  return (cell.growth ?? 0) >= 1 && !cell.burning && !cell.damage && !cell.tree;
+/** Food supply from crop tiles, scaled by seasonal stand height. */
+export function cropFoodSupply(map: MapData, cropCover = 1): number {
+  if (cropCover <= 0) return 0;
+  let supply = 0;
+  for (const cell of map.cells) {
+    if (cell.growth === undefined || cell.burning || cell.damage || cell.tree)
+      continue;
+    supply += Math.min(1, cell.growth) * cropCover;
+  }
+  return supply;
 }
 
 /**
  * Ripen crops that are both wet and lit, and clear those that have gone too dry.
- * Winter holds every field as it is: no growth, no wilt, and no food until spring.
+ * Dormant seasons hold every field as it is: no growth, no wilt, and no food.
  * Returns how many died.
  */
-export function advanceCrops(map: MapData, season: Season = "Summer"): number {
-  if (season === "Winter") return 0;
+export function advanceCrops(map: MapData, cropCover = 1): number {
+  if (cropCover <= 0) return 0;
   let withered = 0;
   for (const cell of map.cells) {
     if (cell.growth === undefined || cell.burning || cell.damage || cell.tree)

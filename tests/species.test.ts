@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { PreviewMossling } from "../lib/map-preview";
-import { groupSpecies, nearestMember, speciesKey } from "../lib/species";
+import {
+  clusterSpecies,
+  groupSpecies,
+  nearestMember,
+  speciesKey,
+  speciesKeyFor,
+} from "../lib/species";
 
 function mossling(
   patch: Partial<PreviewMossling> & Pick<PreviewMossling, "id" | "cellIndex">,
@@ -60,6 +66,75 @@ test("a missing health still counts as alive", () => {
   ]);
   assert.equal(groups.length, 1);
   assert.equal(groups[0]?.count, 1);
+});
+
+test("clusterSpecies merges near-duplicate palettes into one group", () => {
+  const base = ["#ff8090", "#eeddcc"];
+  const drift = ["#ff8191", "#eeddcd"];
+  const groups = clusterSpecies([
+    mossling({ id: 1, cellIndex: 0, colors: base, pattern: 1 }),
+    mossling({ id: 2, cellIndex: 1, colors: drift, pattern: 1 }),
+    mossling({ id: 3, cellIndex: 2, colors: drift, pattern: 1 }),
+  ]);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0]?.count, 3);
+});
+
+test("clusterSpecies merges siblings even when their palettes differ slightly", () => {
+  const groups = clusterSpecies([
+    mossling({
+      id: 1,
+      cellIndex: 0,
+      colors: ["#ff0000", "#00ff00"],
+      pattern: 2,
+      parents: [9, 10],
+    }),
+    mossling({
+      id: 2,
+      cellIndex: 1,
+      colors: ["#0000ff", "#ffff00"],
+      pattern: 3,
+      parents: [9, 10],
+    }),
+  ]);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0]?.count, 2);
+});
+
+test("clusterSpecies keeps unrelated mosslings separate", () => {
+  const groups = clusterSpecies([
+    mossling({
+      id: 1,
+      cellIndex: 0,
+      colors: ["#ffe632", "#769f24"],
+      pattern: 0,
+    }),
+    mossling({
+      id: 2,
+      cellIndex: 1,
+      colors: ["#49d5df", "#6c58d5"],
+      pattern: 0,
+    }),
+  ]);
+  assert.equal(groups.length, 2);
+});
+
+test("speciesKeyFor returns the cluster canonical key", () => {
+  const population = [
+    mossling({ id: 1, cellIndex: 0, colors: ["#ff8090"], pattern: 1 }),
+    mossling({
+      id: 2,
+      cellIndex: 1,
+      colors: ["#ff8191"],
+      pattern: 1,
+      parents: [9, 10],
+    }),
+  ];
+  const cluster = clusterSpecies(population)[0];
+  const subject = population[1];
+  assert.ok(cluster);
+  assert.ok(subject);
+  assert.equal(speciesKeyFor(subject, population), cluster.key);
 });
 
 test("nearest member prefers the tile closest to the focus, then the lower id", () => {

@@ -63,6 +63,24 @@ test("foliage fills in spring, turns in autumn, and snows only once winter has b
   assert.equal(midSpring.snow, 0);
 });
 
+test("crops fill in through spring, stand full in summer, and thin through autumn", () => {
+  const summer = foliageAt(0);
+  const autumnStart = foliageAt(SEASON_SECONDS);
+  const midAutumn = foliageAt(SEASON_SECONDS + SEASON_SECONDS / 2);
+  const winter = foliageAt(SEASON_SECONDS * 2);
+  const springStart = foliageAt(SEASON_SECONDS * 3);
+  const midSpring = foliageAt(SEASON_SECONDS * 3 + SEASON_SECONDS / 2);
+  const nextSummer = foliageAt(SEASON_SECONDS * 4);
+
+  assert.equal(summer.crop, 1);
+  assert.equal(autumnStart.crop, 1);
+  assert.equal(midAutumn.crop, 0.5);
+  assert.equal(winter.crop, 0);
+  assert.equal(springStart.crop, 0);
+  assert.equal(midSpring.crop, 0.5);
+  assert.equal(nextSummer.crop, 1);
+});
+
 test("foliage repaint steps advance four times a season and wrap with the year", () => {
   assert.equal(foliageStep(0), 0);
   assert.equal(foliageStep(SEASON_SECONDS / 4), 1);

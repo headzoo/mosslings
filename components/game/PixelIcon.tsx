@@ -1,3 +1,5 @@
+import type { Season } from "@/lib/game-time";
+
 const icons = {
   rain: [
     ".....b......",
@@ -139,6 +141,48 @@ const icons = {
     ".y...yy...y.",
     ".....yy.....",
   ],
+  sunSpring: [
+    ".....pp.....",
+    ".p...pp...p.",
+    "..p......p..",
+    "....ppyy....",
+    "...ppyyyy...",
+    "pp.pyyyyy.pp",
+    "pp.pyyyyy.pp",
+    "...ppyyyy...",
+    "....ppyy....",
+    "..p......p..",
+    ".p...pp...p.",
+    ".....pp.....",
+  ],
+  sunAutumn: [
+    ".....or.....",
+    ".s...oo...s.",
+    "..s......s..",
+    "....oooo....",
+    "...orrooo...",
+    "oo.orrrro.oo",
+    "oo.orrrro.oo",
+    "...orrooo...",
+    "....oooo....",
+    "..s......s..",
+    ".s...oo...s.",
+    ".....or.....",
+  ],
+  sunWinter: [
+    "....ksk.....",
+    ".k...ii...k.",
+    "..k......k..",
+    "....iddd....",
+    "...iddddi...",
+    "dd.idddid.dd",
+    "dd.idddid.dd",
+    "...iddddi...",
+    "....iddd....",
+    "..k......k..",
+    ".k...ii...k.",
+    "....ksk.....",
+  ],
   heart: [
     "............",
     "..rr..rr....",
@@ -274,9 +318,12 @@ const palette: Record<string, string> = {
   r: "#e54320",
   o: "#ff941b",
   y: "#ffe128",
+  p: "#fff6b8",
+  i: "#c4d4e0",
+  d: "#8a96a4",
   s: "#b8bfc1",
   f: "#f7f2e5",
-  k: "#1a1a1a",
+  k: "#3a4248",
   v: "#d4ff4a",
   n: "#5cbf2e",
   m: "#2d7a16",
@@ -286,6 +333,20 @@ const palette: Record<string, string> = {
 };
 
 export type IconName = keyof typeof icons;
+
+const SEASON_SUN: Record<
+  Season,
+  "sun" | "sunSpring" | "sunAutumn" | "sunWinter"
+> = {
+  Summer: "sun",
+  Spring: "sunSpring",
+  Autumn: "sunAutumn",
+  Winter: "sunWinter",
+};
+
+export function seasonSunIcon(season: Season): IconName {
+  return SEASON_SUN[season];
+}
 
 export function PixelIcon({ name }: { name: IconName }) {
   const pixels = icons[name].flatMap((row, y) =>

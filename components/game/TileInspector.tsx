@@ -10,7 +10,7 @@ import {
   snowDepth,
 } from "@/lib/map-preview";
 import { previewTraits } from "@/lib/mossling-traits";
-import { speciesKey } from "@/lib/species";
+import { speciesKeyFor } from "@/lib/species";
 import { speciesName } from "@/lib/species-name";
 
 import { MosslingPortrait } from "./MosslingPortrait";
@@ -49,9 +49,12 @@ export function TileInspector({
   y,
   cell,
   map,
+  mosslings,
   mossling,
   hostRef,
   onClose,
+  onMove,
+  onClone,
   elapsed,
 }: {
   seed: number;
@@ -59,9 +62,12 @@ export function TileInspector({
   y: number;
   cell: MapCell;
   map?: MapData | null;
+  mosslings: readonly PreviewMossling[];
   mossling?: PreviewMossling;
   hostRef: RefObject<HTMLDivElement | null>;
   onClose: () => void;
+  onMove?: () => void;
+  onClone?: () => void;
   elapsed?: () => number;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -79,11 +85,15 @@ export function TileInspector({
   const traits = mossling
     ? (mossling.traits ?? previewTraits(seed, mossling.id))
     : [];
-  const title = mossling ? speciesName(speciesKey(mossling)) : info.title;
+  const title = mossling
+    ? speciesName(speciesKeyFor(mossling, mosslings))
+    : info.title;
   const look = foliageAt(elapsed?.() ?? 0);
   const snow = map ? snowDepth(map, y * map.width + x, look.snow) : 0;
   const ice = map ? iceCover(y * map.width + x, look.ice) : look.ice;
   const buried = map ? snowBlanket(map, y * map.width + x, look) : false;
+  const alive = mossling ? (mossling.health ?? 100) > 0 : false;
+  const showActions = alive && (onMove || onClone);
   useLayoutEffect(() => {
     const dialog = dialogRef.current;
     const host = hostRef.current;
@@ -136,50 +146,102 @@ export function TileInspector({
         </button>
       </header>
       <div className="inspector-content">
-        <p className="tile-coordinate">
-          Tile {x}, {y} · {info.title}
-        </p>
-        {cell.tree && (
-          <p className="tile-coordinate">
-            Tree health: {Math.ceil(cell.tree.health)}%
-          </p>
-        )}
-        {cell.damage && (
-          <p className="tile-coordinate">Ground: {cell.damage}</p>
-        )}
-        {crop && (
-          <p className="tile-coordinate">
-            Crops:{" "}
-            {(cell.growth ?? 0) >= 1
-              ? "ripe"
-              : (cell.growth ?? 0) <= 0
-                ? "just planted"
-                : `${Math.round((cell.growth ?? 0) * 100)}% grown`}
-          </p>
-        )}
-        {mossling && (
-          <p className="tile-coordinate">
-            Health: {Math.ceil(mossling.health ?? 100)}%
-            {(mossling.health ?? 100) <= 0
-              ? mossling.plagueMonths === undefined
-                ? " · Dead"
-                : " · Dead of the black death"
-              : mossling.plagueMonths === undefined
-                ? ""
-                : mossling.plagueMonths >= 3
-                  ? " · Weakening with the black death"
-                  : " · Infected with the black death"}
-            {mossling.hungry && (mossling.health ?? 100) > 0 && " · Hungry"}
-            {(mossling.panic ?? 0) > 0.1 && " · Panicked — trying to escape"}
-            {mossling.ritual?.phase === "courtship" && " · Courting"}
-            {mossling.ritual?.phase === "family" && " · Staying with family"}
-          </p>
-        )}
-        {mossling?.parents && (
-          <p className="tile-coordinate">
-            Child of Mossling #{mossling.parents[0] + 1} and #
-            {mossling.parents[1] + 1}
-          </p>
+        {mossling ? (
+          <div className="inspector-meta-row">
+            <div className="inspector-meta-details">
+              <p className="tile-coordinate">
+                Tile {x}, {y} · {info.title}
+              </p>
+              {cell.tree && (
+                <p className="tile-coordinate">
+                  Tree health: {Math.ceil(cell.tree.health)}%
+                </p>
+              )}
+              {cell.damage && (
+                <p className="tile-coordinate">Ground: {cell.damage}</p>
+              )}
+              {crop && (
+                <p className="tile-coordinate">
+                  Crops:{" "}
+                  {(cell.growth ?? 0) >= 1
+                    ? "ripe"
+                    : (cell.growth ?? 0) <= 0
+                      ? "just planted"
+                      : `${Math.round((cell.growth ?? 0) * 100)}% grown`}
+                </p>
+              )}
+              <p className="tile-coordinate">
+                Health: {Math.ceil(mossling.health ?? 100)}%
+                {(mossling.health ?? 100) <= 0
+                  ? mossling.plagueMonths === undefined
+                    ? " · Dead"
+                    : " · Dead of the black death"
+                  : mossling.plagueMonths === undefined
+                    ? ""
+                    : mossling.plagueMonths >= 3
+                      ? " · Weakening with the black death"
+                      : " · Infected with the black death"}
+                {mossling.hungry && (mossling.health ?? 100) > 0 && " · Hungry"}
+                {(mossling.panic ?? 0) > 0.1 &&
+                  " · Panicked — trying to escape"}
+                {mossling.ritual?.phase === "courtship" && " · Courting"}
+                {mossling.ritual?.phase === "family" &&
+                  " · Staying with family"}
+              </p>
+              {mossling.parents && (
+                <p className="tile-coordinate">
+                  Child of Mossling #{mossling.parents[0] + 1} and #
+                  {mossling.parents[1] + 1}
+                </p>
+              )}
+            </div>
+            {showActions && (
+              <div className="inspector-actions">
+                {onMove && (
+                  <button
+                    type="button"
+                    className="inspector-action-button"
+                    onClick={onMove}
+                  >
+                    Move
+                  </button>
+                )}
+                {onClone && (
+                  <button
+                    type="button"
+                    className="inspector-action-button"
+                    onClick={onClone}
+                  >
+                    Clone
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            <p className="tile-coordinate">
+              Tile {x}, {y} · {info.title}
+            </p>
+            {cell.tree && (
+              <p className="tile-coordinate">
+                Tree health: {Math.ceil(cell.tree.health)}%
+              </p>
+            )}
+            {cell.damage && (
+              <p className="tile-coordinate">Ground: {cell.damage}</p>
+            )}
+            {crop && (
+              <p className="tile-coordinate">
+                Crops:{" "}
+                {(cell.growth ?? 0) >= 1
+                  ? "ripe"
+                  : (cell.growth ?? 0) <= 0
+                    ? "just planted"
+                    : `${Math.round((cell.growth ?? 0) * 100)}% grown`}
+              </p>
+            )}
+          </>
         )}
         {mossling ? (
           <>

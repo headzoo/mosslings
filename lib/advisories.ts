@@ -6,6 +6,9 @@ import type { WorldResources } from "./world-resources";
 /** Repeat a warning that is still true only after this much real time. */
 export const ADVISORY_REPEAT_MS = 40_000;
 
+/** Average health must fall below this before the health bulletin appears. */
+export const HEALTH_ADVISORY_BELOW = 75;
+
 export type AdvisoryKind =
   | "starve"
   | "wither"
@@ -88,12 +91,14 @@ export function stepAdvisory(
   if (
     hungry &&
     memory.previousHealth !== null &&
-    health < memory.previousHealth
+    health < memory.previousHealth &&
+    health < HEALTH_ADVISORY_BELOW
   ) {
     healthFalling = true;
   }
   if (
     !hungry ||
+    health >= HEALTH_ADVISORY_BELOW ||
     (memory.previousHealth !== null && health > memory.previousHealth)
   ) {
     healthFalling = false;

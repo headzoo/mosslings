@@ -105,6 +105,25 @@ test("sun lights its disk, cures the living, and leaves the dead", () => {
   assert.equal(world.map.cells[0].light, undefined);
   assert.equal(at(0)?.health, 70);
 });
+test("crops marks only freshly planted tiles in effect.hit", () => {
+  const map = fixture(5, 5);
+  const world = new GodWorld(map, []);
+  assert.equal(world.cast("raze", 2, 2), null);
+  const effect = world.effects.find((entry) => entry.kind === "raze");
+  assert.ok(effect);
+  assert.equal(effect.hit.size, 8);
+  assert.ok(effect.hit.has(2 * 5 + 2));
+  map.cells[2 * 5 + 2].growth = 0.5;
+  assert.equal(world.cast("raze", 2, 2, { quiet: true }), null);
+  const replay = world.effects.filter((entry) => entry.kind === "raze").at(-1);
+  assert.ok(replay);
+  assert.equal(replay.hit.size, 0);
+  assert.equal(
+    world.events.some((event) => event.tag === "player-crop-planted"),
+    true,
+  );
+});
+
 test("crops restores burned dirt only in its local area", () => {
   const map = fixture(30, 30);
   map.cells[465].terrain = "dirt";

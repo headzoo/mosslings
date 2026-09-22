@@ -3,6 +3,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { plantStarterFields } from "@/lib/crops";
 import { plantStarterForests } from "@/lib/god/ecology";
+import {
+  createIntroMosslings,
+  ensureIntroZone,
+  introZoneIndices,
+} from "@/lib/intro-mosslings";
 import { generateMap, type MapData, randomSeed } from "@/lib/map";
 import {
   createPreviewMosslings,
@@ -10,15 +15,24 @@ import {
   type PreviewMossling,
 } from "@/lib/map-preview";
 import { GameScreen } from "./GameScreen";
-import { WELCOME_PREFERENCE, WelcomeSplash } from "./WelcomeSplash";
+import type { IntroPhase } from "./MosslingIntro";
+import {
+  isIntroDismissed,
+  rememberIntroDismissal,
+  WELCOME_PREFERENCE,
+  WelcomeSplash,
+} from "./WelcomeSplash";
 
 const EMPTY_MOSSLINGS: PreviewMossling[] = [];
 
 export function GameBootstrap() {
   const [showWelcome, setShowWelcome] = useState<boolean | null>(null);
+  const [introPhase, setIntroPhase] = useState<IntroPhase | null>(null);
   useLayoutEffect(() => {
     try {
-      setShowWelcome(localStorage.getItem(WELCOME_PREFERENCE) !== "true");
+      const hideWelcome = localStorage.getItem(WELCOME_PREFERENCE) === "true";
+      setShowWelcome(!hideWelcome);
+      if (hideWelcome && !isIntroDismissed()) setIntroPhase("mosslings");
     } catch {
       setShowWelcome(true);
     }
@@ -62,10 +76,15 @@ export function GameBootstrap() {
         rockThreshold: 0.66,
         rivers: { count: 1, minRadius: 1, maxRadius: 2 },
       });
-      const mosslings = createPreviewMosslings(map);
-      const occupied = new Set(mosslings.map((mossling) => mossling.cellIndex));
+      ensureIntroZone(map);
+      const intro = createIntroMosslings(map);
+      const occupied = introZoneIndices(map);
+      const rest = createPreviewMosslings(map, { startId: 4, occupied });
+      const mosslings = [...intro, ...rest];
+      for (const mossling of rest) occupied.add(mossling.cellIndex);
       plantStarterForests(map, occupied);
       plantStarterFields(map, mosslings.length, occupied);
+      ensureIntroZone(map);
       setWorld({ map, mosslings });
     };
     const frame = requestAnimationFrame(measure);
@@ -82,13 +101,36 @@ export function GameBootstrap() {
         map={world?.map ?? null}
         mosslings={world?.mosslings ?? EMPTY_MOSSLINGS}
         boardRef={boardRef}
-        suspended={showWelcome !== false || !world}
-        onRestoreWelcome={() => setShowWelcome(true)}
+        suspended={showWelcome !== false || introPhase !== null || !world}
+        introPhase={world ? introPhase : null}
+        onIntroContinue={() =>
+          setIntroPhase((phase) => {
+            if (phase === "mosslings") return "species";
+            if (phase === "species") return "powers";
+            if (phase === "powers") return "world";
+            if (phase === "world") {
+              try {
+                rememberIntroDismissal();
+              } catch {
+                // Intro finished; preference is best-effort.
+              }
+              return null;
+            }
+            return null;
+          })
+        }
+        onRestoreWelcome={() => {
+          setShowWelcome(true);
+          setIntroPhase(null);
+        }}
       />
       {showWelcome && (
         <WelcomeSplash
           ready={!!world}
-          onDismiss={() => setShowWelcome(false)}
+          onDismiss={() => {
+            setShowWelcome(false);
+            if (!isIntroDismissed()) setIntroPhase("mosslings");
+          }}
         />
       )}
     </>

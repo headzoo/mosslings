@@ -1,3 +1,4 @@
+import type { Ref } from "react";
 import type { PowerId } from "@/lib/god/types";
 import { type IconName, PixelIcon } from "./PixelIcon";
 
@@ -57,9 +58,20 @@ export function GodLightning(props: ControlsProps) {
 export function GodMeteor(props: ControlsProps) {
   return <GodButton {...props} name="Meteor" icon="meteor" power="meteor" />;
 }
-export function GodControls(props: ControlsProps) {
+export function GodControls({
+  ref,
+  highlighted = false,
+  ...props
+}: ControlsProps & {
+  ref?: Ref<HTMLElement>;
+  highlighted?: boolean;
+}) {
   return (
-    <aside className="god-rail" aria-label="God powers">
+    <aside
+      ref={ref}
+      className={`god-rail${highlighted ? " god-rail--intro-highlight" : ""}`}
+      aria-label="God powers"
+    >
       <div className="god-buttons">
         <GodRain {...props} />
         <GodSun {...props} />

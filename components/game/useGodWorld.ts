@@ -53,13 +53,38 @@ export function useGodWorld(
     },
     [engine, getElapsed],
   );
+  const moveMossling = useCallback(
+    (id: number, x: number, y: number) => {
+      if (!engine) return "The world is still growing.";
+      const advanced = engine.advanceTo(getElapsed());
+      const result = engine.moveMossling(id, x, y);
+      if (advanced || result === null) dirtyRef.current = true;
+      revisionRef.current = engine.revision;
+      return result;
+    },
+    [engine, getElapsed],
+  );
+  const cloneMossling = useCallback(
+    (id: number, x: number, y: number) => {
+      if (!engine) return "The world is still growing.";
+      const advanced = engine.advanceTo(getElapsed());
+      const result = engine.cloneMossling(id, x, y);
+      if (advanced || result === null) dirtyRef.current = true;
+      revisionRef.current = engine.revision;
+      return result;
+    },
+    [engine, getElapsed],
+  );
   return {
     engine,
     cast,
+    moveMossling,
+    cloneMossling,
     revisionRef,
     map: engine?.map ?? map,
     mosslings: snapshot?.mosslings ?? mosslings,
     events: snapshot?.events ?? [],
     resources: snapshot?.resources ?? null,
+    resourceHistory: snapshot?.resourceHistory ?? null,
   };
 }

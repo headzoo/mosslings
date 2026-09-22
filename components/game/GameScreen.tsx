@@ -17,15 +17,28 @@ import {
 import { GOD_ACTIONS } from "@/lib/god/actions";
 import { EFFECT_CAP_MESSAGE } from "@/lib/god/engine";
 import type { PowerId } from "@/lib/god/types";
+import {
+  INTRO_CAMERA_TILE_SIZE,
+  introClusterCenter,
+  introSpotlightRadiusPx,
+} from "@/lib/intro-mosslings";
 import type { MapCell, MapData } from "@/lib/map";
 import { getCamera } from "@/lib/map-camera";
 import type { PreviewMossling } from "@/lib/map-preview";
-import { groupSpecies, nearestMember, type SpeciesGroup } from "@/lib/species";
+import {
+  clusterSpecies,
+  nearestMember,
+  type SpeciesGroup,
+  speciesKeyFor,
+} from "@/lib/species";
+import { speciesName } from "@/lib/species-name";
+import { CropIntro } from "./CropIntro";
 import { GameMap, Minimap } from "./GameMap";
 import { GodControls } from "./GodControls";
 import { GodEffects } from "./GodEffects";
 import { Health } from "./Health";
 import { LoreBoard, NEWS_MS, type NewsFlash } from "./LoreBoard";
+import { type IntroPhase, MosslingIntro } from "./MosslingIntro";
 import { Pollinators } from "./Pollinators";
 import { SkyClouds } from "./SkyClouds";
 import { SpeciesList } from "./SpeciesList";
@@ -33,6 +46,10 @@ import { TileInspector } from "./TileInspector";
 import { PlayControls, Year } from "./TimeControls";
 import { useGameTime } from "./useGameTime";
 import { useGodWorld } from "./useGodWorld";
+import {
+  isCropIntroDismissed,
+  rememberCropIntroDismissal,
+} from "./WelcomeSplash";
 import { ZoomControls } from "./ZoomControls";
 
 type TileSelection = {
@@ -44,33 +61,64 @@ type TileSelection = {
   mossling?: PreviewMossling;
   speciesKey?: string;
 };
+type MosslingTarget = {
+  mosslingId: number;
+  label: string;
+  mode: "move" | "clone";
+};
 
 function snapshotCell(cell: MapCell): MapCell {
   return cell.tree ? { ...cell, tree: { ...cell.tree } } : { ...cell };
 }
+
+const DEFAULT_CENTER = { x: 0.5, y: 0.5 };
+const INTRO_TILE_SIZE = INTRO_CAMERA_TILE_SIZE;
+const DEFAULT_TILE_SIZE = 8;
+const CAMERA_ANIM_MS = 400;
 
 export function GameScreen({
   map: initialMap,
   mosslings: initialMosslings,
   boardRef,
   suspended = false,
+  introPhase = null,
+  onIntroContinue,
   onRestoreWelcome,
 }: {
   map: MapData | null;
   mosslings: PreviewMossling[];
   boardRef?: Ref<HTMLDivElement>;
   suspended?: boolean;
+  introPhase?: IntroPhase | null;
+  onIntroContinue?: () => void;
   onRestoreWelcome: () => void;
 }) {
-  const gameTime = useGameTime(suspended);
-  const { map, mosslings, engine, cast, events, resources, revisionRef } =
-    useGodWorld(
-      initialMap,
-      initialMosslings,
-      gameTime.getDate,
-      gameTime.getElapsed,
-    );
+  const introActive = introPhase !== null;
+  const [cropIntroOpen, setCropIntroOpen] = useState(false);
+  const cropIntroTriggered = useRef(false);
+  const tutorialPaused = introActive || cropIntroOpen;
+  const gameTime = useGameTime(suspended || cropIntroOpen);
+  const {
+    map,
+    mosslings,
+    engine,
+    cast,
+    moveMossling,
+    cloneMossling,
+    events,
+    resources,
+    resourceHistory,
+    revisionRef,
+  } = useGodWorld(
+    initialMap,
+    initialMosslings,
+    gameTime.getDate,
+    gameTime.getElapsed,
+  );
   const [power, setPower] = useState<PowerId | null>(null);
+  const [mosslingTarget, setMosslingTarget] = useState<MosslingTarget | null>(
+    null,
+  );
   const [placementMessage, setPlacementMessage] = useState("");
   const [placementTooltip, setPlacementTooltip] = useState<{
     message: string;
@@ -83,6 +131,7 @@ export function GameScreen({
         return;
       }
       setPower(null);
+      setMosslingTarget(null);
       setPlacementMessage("");
       setPlacementTooltip(null);
     };
@@ -90,14 +139,29 @@ export function GameScreen({
     return () => window.removeEventListener("keydown", cancel);
   }, []);
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const speciesListRef = useRef<HTMLElement | null>(null);
+  const godRailRef = useRef<HTMLElement | null>(null);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
-  const [tileSize, setTileSize] = useState(8);
-  const [center, setCenter] = useState({ x: 0.5, y: 0.5 });
+  const [tileSize, setTileSize] = useState(DEFAULT_TILE_SIZE);
+  const [center, setCenter] = useState(DEFAULT_CENTER);
+  const cameraAnim = useRef<number | null>(null);
+  const cameraState = useRef({
+    center: DEFAULT_CENTER,
+    tileSize: DEFAULT_TILE_SIZE,
+  });
+  cameraState.current = { center, tileSize };
   const [selection, setSelection] = useState<TileSelection | null>(null);
   const [flash, setFlash] = useState<NewsFlash | null>(null);
   const flashId = useRef(0);
   const advisoryMemory = useRef<AdvisoryMemory>(EMPTY_ADVISORY_MEMORY);
   const newsUntil = useRef(0);
+  useEffect(() => {
+    if (cropIntroTriggered.current || isCropIntroDismissed()) return;
+    if (events.some((event) => event.tag === "player-crop-planted")) {
+      cropIntroTriggered.current = true;
+      setCropIntroOpen(true);
+    }
+  }, [events]);
   useEffect(() => {
     if (!map || !resources) return;
     const now = performance.now();
@@ -132,10 +196,44 @@ export function GameScreen({
     [boardRef],
   );
   const zoom = useCallback(
-    (direction: number) =>
-      setTileSize((size) => Math.max(8, Math.min(32, size + direction * 8))),
-    [],
+    (direction: number) => {
+      if (tutorialPaused) return;
+      setTileSize((size) => Math.max(8, Math.min(32, size + direction * 8)));
+    },
+    [tutorialPaused],
   );
+  useEffect(() => {
+    if (!map) return;
+    const introZoomed =
+      introPhase === "mosslings" ||
+      introPhase === "species" ||
+      introPhase === "powers";
+    const targetCenter = introZoomed ? introClusterCenter(map) : DEFAULT_CENTER;
+    const targetTileSize = introZoomed ? INTRO_TILE_SIZE : DEFAULT_TILE_SIZE;
+    const from = cameraState.current;
+    const start = performance.now();
+    if (cameraAnim.current) cancelAnimationFrame(cameraAnim.current);
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / CAMERA_ANIM_MS);
+      const ease = t * (2 - t);
+      setCenter({
+        x: from.center.x + (targetCenter.x - from.center.x) * ease,
+        y: from.center.y + (targetCenter.y - from.center.y) * ease,
+      });
+      setTileSize(from.tileSize + (targetTileSize - from.tileSize) * ease);
+      if (t < 1) {
+        cameraAnim.current = requestAnimationFrame(tick);
+      } else {
+        setCenter(targetCenter);
+        setTileSize(targetTileSize);
+        cameraAnim.current = null;
+      }
+    };
+    cameraAnim.current = requestAnimationFrame(tick);
+    return () => {
+      if (cameraAnim.current) cancelAnimationFrame(cameraAnim.current);
+    };
+  }, [introPhase, map]);
   useLayoutEffect(() => {
     const board = viewportRef.current;
     if (!board) return;
@@ -149,7 +247,8 @@ export function GameScreen({
       if (
         event.ctrlKey ||
         event.deltaY === 0 ||
-        board.querySelector("dialog[open]")
+        board.querySelector("dialog[open]") ||
+        board.querySelector(".mossling-intro")
       )
         return;
       event.preventDefault();
@@ -164,6 +263,17 @@ export function GameScreen({
     };
   }, [zoom]);
   const camera = map ? getCamera(map, viewport, tileSize, center) : null;
+  const introSpotlight =
+    introPhase === "mosslings" && map && camera
+      ? (() => {
+          const cluster = introClusterCenter(map);
+          return {
+            x: camera.left + cluster.x * map.width * tileSize,
+            y: camera.top + cluster.y * map.height * tileSize,
+            r: introSpotlightRadiusPx(tileSize),
+          };
+        })()
+      : null;
   const tileAt = (clientX: number, clientY: number) => {
     if (!map || !camera || !viewportRef.current) return null;
     const rect = viewportRef.current.getBoundingClientRect();
@@ -229,8 +339,44 @@ export function GameScreen({
     }
     return false;
   };
+  const cancelMosslingTarget = () => {
+    setMosslingTarget(null);
+    setPlacementMessage("");
+    setPlacementTooltip(null);
+  };
+  const beginMosslingTarget = (
+    mosslingId: number,
+    label: string,
+    mode: "move" | "clone",
+  ) => {
+    setSelection(null);
+    setPower(null);
+    setPlacementMessage("");
+    setPlacementTooltip(null);
+    setMosslingTarget({ mosslingId, label, mode });
+  };
+  const placeMosslingTarget = (x: number, y: number) => {
+    if (!mosslingTarget) return;
+    const message =
+      mosslingTarget.mode === "move"
+        ? moveMossling(mosslingTarget.mosslingId, x, y)
+        : cloneMossling(mosslingTarget.mosslingId, x, y);
+    if (message) {
+      setPlacementTooltip({ message, x, y });
+      return;
+    }
+    cancelMosslingTarget();
+  };
   const selectAt = (clientX: number, clientY: number) => {
     const tile = tileAt(clientX, clientY);
+    if (mosslingTarget) {
+      if (!tile) {
+        cancelMosslingTarget();
+        return;
+      }
+      placeMosslingTarget(tile.x, tile.y);
+      return;
+    }
     if (!tile || !map) return;
     if (power) {
       placePower(tile.x, tile.y, false);
@@ -247,7 +393,7 @@ export function GameScreen({
     });
   };
   const selectSpecies = (group: SpeciesGroup) => {
-    if (!map) return;
+    if (tutorialPaused || !map) return;
     const focus = camera
       ? {
           x: camera.x + camera.width / 2,
@@ -270,7 +416,7 @@ export function GameScreen({
   };
   useEffect(() => {
     if (!map || !selection?.speciesKey || selection.seed !== map.seed) return;
-    const group = groupSpecies(mosslings).find(
+    const group = clusterSpecies(mosslings).find(
       (item) => item.key === selection.speciesKey,
     );
     if (!group) {
@@ -302,7 +448,7 @@ export function GameScreen({
     });
   }, [map, camera, mosslings, selection]);
   const selected = selection?.seed === map?.seed ? selection : null;
-  const species = groupSpecies(mosslings);
+  const species = clusterSpecies(mosslings);
   const highlighted = selected?.speciesKey
     ? (species.find((group) => group.key === selected.speciesKey)?.members ??
       [])
@@ -321,7 +467,7 @@ export function GameScreen({
             alt="Mosslings — Small bits of wonder"
           />
         </div>
-        <Health resources={resources} />
+        <Health resources={resources} history={resourceHistory} />
         <Year
           year={gameTime.year}
           season={gameTime.season}
@@ -339,10 +485,13 @@ export function GameScreen({
       </header>
       <div className="game-body">
         <GodControls
+          ref={godRailRef}
           selected={power}
-          disabled={!engine}
+          disabled={!engine || tutorialPaused}
+          highlighted={introPhase === "powers"}
           onSelect={(next) => {
             setPower((current) => (current === next ? null : next));
+            setMosslingTarget(null);
             setPlacementMessage("");
             setPlacementTooltip(null);
             setSelection(null);
@@ -353,9 +502,10 @@ export function GameScreen({
             <button
               type="button"
               className="camera-surface"
-              data-targeting={!!power}
+              data-targeting={!!power || !!mosslingTarget}
               aria-label="Map camera: click a tile to inspect, use plus and minus to zoom"
               onClick={(event) => {
+                if (tutorialPaused) return;
                 if (event.detail === 0 && viewportRef.current) {
                   const rect = viewportRef.current.getBoundingClientRect();
                   selectAt(
@@ -365,6 +515,7 @@ export function GameScreen({
                 }
               }}
               onKeyDown={(event) => {
+                if (tutorialPaused) return;
                 if (event.key === "+" || event.key === "=") {
                   event.preventDefault();
                   zoom(1);
@@ -414,7 +565,8 @@ export function GameScreen({
                 }
               }}
               onPointerDown={(event) => {
-                if (!map || !camera || event.button !== 0) return;
+                if (tutorialPaused || !map || !camera || event.button !== 0)
+                  return;
                 event.currentTarget.setPointerCapture(event.pointerId);
                 const tile = tileAt(event.clientX, event.clientY);
                 stroke.current = {
@@ -583,12 +735,58 @@ export function GameScreen({
                 </button>
               </output>
             )}
+            {mosslingTarget && (
+              <output className="power-placement">
+                <strong>
+                  {mosslingTarget.mode === "move" ? "Move" : "Clone"}{" "}
+                  {mosslingTarget.label}
+                </strong>
+                <span>Choose a tile · Esc to cancel</span>
+                <button
+                  type="button"
+                  aria-label={
+                    mosslingTarget.mode === "move"
+                      ? "Cancel move"
+                      : "Cancel clone"
+                  }
+                  onClick={cancelMosslingTarget}
+                >
+                  ×
+                </button>
+              </output>
+            )}
             {gameTime.isPlaying && gameTime.rate > 1 && (
               <output className="time-rate-indicator" aria-live="polite">
                 &gt;&gt; {gameTime.rate}x speed
               </output>
             )}
-            <ZoomControls tileSize={tileSize} ready={!!map} onZoom={zoom} />
+            {cropIntroOpen && (
+              <CropIntro
+                onDismiss={() => {
+                  try {
+                    rememberCropIntroDismissal();
+                  } catch {
+                    // Best-effort preference; still close the callout.
+                  }
+                  setCropIntroOpen(false);
+                }}
+              />
+            )}
+            {introPhase &&
+              introPhase !== "species" &&
+              introPhase !== "powers" &&
+              onIntroContinue && (
+                <MosslingIntro
+                  phase={introPhase}
+                  onContinue={onIntroContinue}
+                  spotlight={introSpotlight}
+                />
+              )}
+            <ZoomControls
+              tileSize={tileSize}
+              ready={!!map && !tutorialPaused}
+              onZoom={zoom}
+            />
             {selected && (
               <TileInspector
                 seed={selected.seed}
@@ -596,6 +794,7 @@ export function GameScreen({
                 y={selected.y}
                 cell={selected.cell}
                 map={map}
+                mosslings={mosslings}
                 mossling={
                   selected.mossling
                     ? mosslings.find((m) => m.id === selected.mossling?.id)
@@ -603,6 +802,36 @@ export function GameScreen({
                 }
                 hostRef={viewportRef}
                 onClose={() => setSelection(null)}
+                onMove={
+                  selected.mossling && !tutorialPaused
+                    ? () => {
+                        const mossling = mosslings.find(
+                          (m) => m.id === selected.mossling?.id,
+                        );
+                        if (!mossling || (mossling.health ?? 100) <= 0) return;
+                        beginMosslingTarget(
+                          mossling.id,
+                          speciesName(speciesKeyFor(mossling, mosslings)),
+                          "move",
+                        );
+                      }
+                    : undefined
+                }
+                onClone={
+                  selected.mossling && !tutorialPaused
+                    ? () => {
+                        const mossling = mosslings.find(
+                          (m) => m.id === selected.mossling?.id,
+                        );
+                        if (!mossling || (mossling.health ?? 100) <= 0) return;
+                        beginMosslingTarget(
+                          mossling.id,
+                          speciesName(speciesKeyFor(mossling, mosslings)),
+                          "clone",
+                        );
+                      }
+                    : undefined
+                }
                 elapsed={gameTime.getElapsed}
               />
             )}
@@ -611,9 +840,11 @@ export function GameScreen({
         </section>
         <aside className="world-sidebar">
           <SpeciesList
+            ref={speciesListRef}
             groups={species}
             selectedKey={selected?.speciesKey ?? null}
             onSelect={selectSpecies}
+            highlighted={introPhase === "species"}
           />
           <Minimap
             map={map}
@@ -626,6 +857,20 @@ export function GameScreen({
           />
         </aside>
       </div>
+      {introPhase === "species" && onIntroContinue && (
+        <MosslingIntro
+          phase="species"
+          onContinue={onIntroContinue}
+          highlightRef={speciesListRef}
+        />
+      )}
+      {introPhase === "powers" && onIntroContinue && (
+        <MosslingIntro
+          phase="powers"
+          onContinue={onIntroContinue}
+          highlightRef={godRailRef}
+        />
+      )}
     </main>
   );
 }

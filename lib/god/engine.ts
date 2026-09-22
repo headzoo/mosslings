@@ -1,14 +1,19 @@
-import { advanceCrops, appetite, ripeTiles } from "../crops";
+import { advanceCrops, appetite, cropFoodSupply } from "../crops";
 import {
+  foliageAt,
   type GameDate,
   gameDateAt,
   MONTH_SECONDS,
-  type Season,
 } from "../game-time";
 import type { MapData } from "../map";
 import type { PreviewMossling } from "../map-preview";
 import { previewTraits } from "../mossling-traits";
 import { advanceVegetation } from "../vegetation";
+import {
+  ResourceHistory,
+  sampleFromResources,
+  type ResourceHistorySample,
+} from "../resource-history";
 import { countWorldResources, type WorldResources } from "../world-resources";
 import { GOD_ACTIONS } from "./actions";
 import { DisasterAvoidance } from "./avoidance";
@@ -41,6 +46,7 @@ export interface WorldSnapshot {
   mosslings: PreviewMossling[];
   events: WorldEvent[];
   resources: WorldResources;
+  resourceHistory: ResourceHistorySample[];
 }
 const MAX_EFFECTS = 16;
 export const EFFECT_CAP_MESSAGE = "Let a few active powers finish first.";
@@ -58,6 +64,7 @@ export class GodWorld {
   private nextMosslingId = 1;
   private nextEventId = 1;
   private killed = 0;
+  private born = 0;
   private drowned = new Set<number>();
   private starved = new Set<number>();
   private occupied = new Map<number, PreviewMossling>();
@@ -71,6 +78,7 @@ export class GodWorld {
   private pendingStorm: Point | null = null;
   private advancing = false;
   private avoidance: DisasterAvoidance;
+  private resourceHistory = ResourceHistory.empty();
   readonly context: GodContext;
 
   constructor(
@@ -237,12 +245,37 @@ export class GodWorld {
       },
     };
     this.removeDead();
+    this.recordResourceHistory();
+  }
+  private recordResourceHistory() {
+    this.resourceHistory.record(
+      sampleFromResources(
+        countWorldResources(
+          this.map,
+          this.mosslings,
+          this.killed,
+          this.born,
+          foliageAt(this.elapsed).crop,
+        ),
+      ),
+    );
   }
   private record(message: string) {
     this.events = [
       {
         id: this.nextEventId++,
         message,
+        ...(this.advancing ? gameDateAt(this.elapsed) : this.getDate()),
+      },
+      ...this.events,
+    ].slice(0, 30);
+  }
+  private recordTagged(tag: WorldEvent["tag"]) {
+    this.events = [
+      {
+        id: this.nextEventId++,
+        message: "",
+        tag,
         ...(this.advancing ? gameDateAt(this.elapsed) : this.getDate()),
       },
       ...this.events,
@@ -255,6 +288,65 @@ export class GodWorld {
     tune: { quiet?: boolean } = {},
   ): string | null {
     return this.begin(kind, x, y, tune);
+  }
+  moveMossling(id: number, x: number, y: number): string | null {
+    const source = this.mosslings.find((m) => m.id === id);
+    if (!source || (source.health ?? 100) <= 0) return "That Mossling is gone.";
+    if (!this.context.cell(x, y)) return "Choose a tile inside the map.";
+    const destIndex = y * this.map.width + x;
+    if (source.cellIndex === destIndex) return null;
+    const error = this.mosslingDestinationError(source, x, y);
+    if (error) return error;
+    this.context.move(source, x, y);
+    this.revision++;
+    return null;
+  }
+  cloneMossling(id: number, x: number, y: number): string | null {
+    const source = this.mosslings.find((m) => m.id === id);
+    if (!source || (source.health ?? 100) <= 0) return "That Mossling is gone.";
+    if (!this.context.cell(x, y)) return "Choose a tile inside the map.";
+    const error = this.mosslingDestinationError(source, x, y);
+    if (error) return error;
+    const index = y * this.map.width + x;
+    const newId = this.nextMosslingId++;
+    const traits = (source.traits ?? []).map((trait) => ({ ...trait }));
+    const clone: PreviewMossling = {
+      id: newId,
+      cellIndex: index,
+      health: source.health ?? 100,
+      colors: [...source.colors],
+      pattern: source.pattern,
+      traits,
+      hungry: source.hungry,
+    };
+    this.mosslings.push(clone);
+    this.occupied.set(index, clone);
+    this.resistance.set(
+      clone.id,
+      new Map(traits.map((trait) => [trait.label, trait.value])),
+    );
+    this.born += 1;
+    this.record("1 Mossling was cloned.");
+    this.revision++;
+    return null;
+  }
+  private mosslingDestinationError(
+    source: PreviewMossling,
+    x: number,
+    y: number,
+  ): string | null {
+    if (this.context.canMoveTo(source, x, y)) return null;
+    const cell = this.context.cell(x, y);
+    if (!cell) return "Choose a tile inside the map.";
+    if (cell.tree) return "That tile has a tree.";
+    if (cell.burning)
+      return "Put out the fire before placing a Mossling there.";
+    if (cell.terrain === "water") return "Mosslings cannot stand on water.";
+    if (cell.terrain === "rock") return "Mosslings cannot stand on stone.";
+    const index = y * this.map.width + x;
+    if (this.occupied.has(index)) return "That tile is already occupied.";
+    if (!this.ecology.canEnter(index)) return "That ground is not ready yet.";
+    return "That tile is not a safe place for a Mossling.";
   }
   /** Crops and lightning finish on their first step; the slot after that is only a flash. */
   private freeFlash(kind: PowerId) {
@@ -300,6 +392,8 @@ export class GodWorld {
     if (tune.message) this.record(tune.message);
     else if (!tune.quiet) this.record(`${action.label} at tile ${x}, ${y}.`);
     if (e.kind === "disease" && e.hit.size) this.record(caught(e.hit.size));
+    if (e.kind === "raze" && e.hit.size)
+      this.recordTagged("player-crop-planted");
     this.removeDead();
     this.revision++;
     return null;
@@ -447,10 +541,10 @@ export class GodWorld {
           this.elapsed,
           new Set(this.occupied.keys()),
         );
-        const season = gameDateAt(this.elapsed).season;
-        const withered = advanceCrops(this.map, season);
+        const look = foliageAt(this.elapsed);
+        const withered = advanceCrops(this.map, look.crop);
         advanceVegetation(this.map);
-        this.feed(season);
+        this.feed(look.crop);
         this.rollWeather();
         this.removeDead();
         if (result.repaired)
@@ -461,6 +555,7 @@ export class GodWorld {
           this.record(
             `The crops withered on ${withered} tile${withered === 1 ? "" : "s"}.`,
           );
+        this.recordResourceHistory();
         this.nextMonth += MONTH_SECONDS;
         changed = true;
       }
@@ -470,10 +565,10 @@ export class GodWorld {
     return changed;
   }
 
-  private feed(season: Season) {
+  private feed(cropCover: number) {
     const living = this.mosslings.filter((m) => (m.health ?? 100) > 0);
     if (living.length === 0) return;
-    const supply = ripeTiles(this.map, season);
+    const supply = cropFoodSupply(this.map, cropCover);
     const demand = living.reduce((sum, m) => sum + appetite(m.traits), 0);
     const ratio = demand <= 0 ? 1 : supply / demand;
     const perHead = supply / living.length;
@@ -504,7 +599,7 @@ export class GodWorld {
     markStarved();
     // A full table of health can last a foodless winter. The monthly cull would
     // kill someone every month even at 100 health, so winter spends health only.
-    if (season === "Winter" || !starving) return;
+    if (cropCover <= 0 || !starving) return;
     const deaths = Math.min(
       living.length,
       Math.max(1, Math.ceil((0.25 - perHead) * living.length)),
@@ -638,6 +733,7 @@ export class GodWorld {
       },
       nextId: () => this.nextMosslingId++,
     });
+    this.born += born;
     if (born === 1) this.record("1 Mossling was born.");
     else if (born > 1) this.record(`${born} Mosslings were born.`);
     return busy;
@@ -707,7 +803,8 @@ export class GodWorld {
         this.map,
         this.mosslings,
         this.killed,
-        gameDateAt(this.elapsed).season,
+        this.born,
+        foliageAt(this.elapsed).crop,
       ),
       map: {
         ...this.map,
@@ -725,6 +822,7 @@ export class GodWorld {
         ritual: m.ritual ? { ...m.ritual } : undefined,
       })),
       events: [...this.events],
+      resourceHistory: this.resourceHistory.values(),
     };
   }
   draw(painter: EffectPainter) {

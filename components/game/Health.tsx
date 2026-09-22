@@ -1,104 +1,182 @@
+import type { ResourceHistorySample } from "@/lib/resource-history";
 import type { WorldResources } from "@/lib/world-resources";
+import { Sparkline } from "./Sparkline";
 
 function HealthStat({
   label,
   value,
   kind,
   description,
+  sparkline,
+  sparklineLabel,
 }: {
   label: string;
   value: number | string | null;
   kind: string;
   description?: string;
+  sparkline: number[];
+  sparklineLabel: string;
 }) {
   return (
     <div className={`health-stat health-${kind}`} title={description}>
-      <span className="resource-swatch" />
-      <div>
-        <dt>{label}</dt>
-        <dd>{value ?? "—"}</dd>
+      <div className="health-stat-head">
+        <span className="resource-swatch" />
+        <div className="health-stat-text">
+          <dt>{label}</dt>
+          <dd>{value ?? "—"}</dd>
+        </div>
       </div>
+      <Sparkline values={sparkline} label={sparklineLabel} />
     </div>
+  );
+}
+export function HealthBorn({
+  value,
+  sparkline,
+}: {
+  value: number | null;
+  sparkline: number[];
+}) {
+  return (
+    <HealthStat
+      label="Born"
+      kind="born"
+      value={value}
+      description="Mosslings born during play"
+      sparkline={sparkline}
+      sparklineLabel="Mosslings born over the last year"
+    />
   );
 }
 export function HealthMosslings({
   value,
-  killed,
+  sparkline,
 }: {
   value: number | null;
-  killed: number | null;
+  sparkline: number[];
 }) {
   return (
     <HealthStat
       label="Mosslings"
       kind="mosslings"
-      value={value === null || killed === null ? null : `${value} / ${killed}`}
-      description="Mosslings: alive / killed"
+      value={value}
+      description="Living Mosslings"
+      sparkline={sparkline}
+      sparklineLabel="Mosslings alive over the last year"
     />
   );
 }
-export function HealthFood({ value }: { value: number | null }) {
+export function HealthFood({
+  value,
+  sparkline,
+}: {
+  value: number | null;
+  sparkline: number[];
+}) {
   return (
     <HealthStat
       label="Crops"
       kind="food"
       value={value}
-      description="Ripe crop tiles. One fully grown tile feeds about one Mossling."
+      description="Available crop food. One full summer tile feeds about one Mossling."
+      sparkline={sparkline}
+      sparklineLabel="Crop food over the last year"
     />
   );
 }
-export function HealthTrees({ value }: { value: number | null }) {
+export function HealthDied({
+  value,
+  sparkline,
+}: {
+  value: number | null;
+  sparkline: number[];
+}) {
   return (
     <HealthStat
-      label="Trees"
-      kind="trees"
+      label="Died"
+      kind="died"
       value={value}
-      description="Living tree tiles on the map"
+      description="Mosslings that have died"
+      sparkline={sparkline}
+      sparklineLabel="Mosslings died over the last year"
     />
   );
 }
-export function HealthStone({ value }: { value: number | null }) {
+export function HealthDestroyed({
+  value,
+  sparkline,
+}: {
+  value: number | null;
+  sparkline: number[];
+}) {
   return (
     <HealthStat
-      label="Stone"
-      kind="stone"
+      label="Destroyed"
+      kind="destroyed"
       value={value}
-      description="Available stone: undamaged rock tiles"
+      description="Tiles damaged by disasters that have not fully recovered"
+      sparkline={sparkline}
+      sparklineLabel="Destroyed tiles over the last year"
     />
   );
 }
-export function HealthWater({ value }: { value: number | null }) {
-  return (
-    <HealthStat
-      label="Water"
-      kind="water"
-      value={value}
-      description="Available water: water tiles"
-    />
-  );
-}
-export function HealthVital({ value }: { value: number | null }) {
+export function HealthVital({
+  value,
+  sparkline,
+}: {
+  value: number | null;
+  sparkline: number[];
+}) {
   return (
     <HealthStat
       label="Health"
       kind="vital"
       value={value === null ? null : `${value}/100`}
       description="Average health of living Mosslings. Hunger pulls this down when ripe fields run short."
+      sparkline={sparkline}
+      sparklineLabel="Average Mossling health over the last year"
     />
   );
 }
-export function Health({ resources }: { resources: WorldResources | null }) {
+function series(
+  history: ResourceHistorySample[] | null,
+  key: keyof ResourceHistorySample,
+): number[] {
+  return history?.map((sample) => sample[key]) ?? [];
+}
+export function Health({
+  resources,
+  history,
+}: {
+  resources: WorldResources | null;
+  history: ResourceHistorySample[] | null;
+}) {
   return (
     <dl className="health panel" aria-label="World resources">
       <HealthMosslings
         value={resources?.mosslings ?? null}
-        killed={resources?.killed ?? null}
+        sparkline={series(history, "mosslings")}
       />
-      <HealthFood value={resources?.food ?? null} />
-      <HealthTrees value={resources?.trees ?? null} />
-      <HealthStone value={resources?.stone ?? null} />
-      <HealthWater value={resources?.water ?? null} />
-      <HealthVital value={resources?.health ?? null} />
+      <HealthBorn
+        value={resources?.born ?? null}
+        sparkline={series(history, "born")}
+      />
+      <HealthDied
+        value={resources?.killed ?? null}
+        sparkline={series(history, "killed")}
+      />
+      <HealthDestroyed
+        value={resources?.destroyed ?? null}
+        sparkline={series(history, "destroyed")}
+      />
+      <HealthFood
+        value={resources?.food ?? null}
+        sparkline={series(history, "food")}
+      />
+      <HealthVital
+        value={resources?.health ?? null}
+        sparkline={series(history, "health")}
+      />
     </dl>
   );
 }

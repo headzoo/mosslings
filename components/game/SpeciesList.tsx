@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef } from "react";
+import { type Ref, useLayoutEffect, useRef } from "react";
 import { paintedMosslingColor, TILE_SIZE } from "@/lib/map-preview";
 import type { SpeciesGroup } from "@/lib/species";
 
@@ -45,16 +45,24 @@ function SpeciesSwatch({
 }
 
 export function SpeciesList({
+  ref,
   groups,
   selectedKey,
   onSelect,
+  highlighted = false,
 }: {
+  ref?: Ref<HTMLElement>;
   groups: SpeciesGroup[];
   selectedKey: string | null;
   onSelect: (group: SpeciesGroup) => void;
+  highlighted?: boolean;
 }) {
   return (
-    <section className="species-list panel" aria-label="Species">
+    <section
+      ref={ref}
+      className={`species-list panel${highlighted ? " species-list--intro-highlight" : ""}`}
+      aria-label="Species"
+    >
       <h2>Species</h2>
       {groups.length === 0 ? (
         <p className="species-empty">No Mosslings</p>

@@ -287,7 +287,17 @@ const backdrop: Record<PortraitName, string> = {
 
 type PortraitName = keyof typeof portraits;
 
-function portraitFor(cell: MapCell): { name: PortraitName; label: string } {
+const CROP_PORTRAIT = new Set<PortraitName>([
+  "cropSown",
+  "cropGrowing",
+  "cropRipe",
+]);
+const CROP_FOLIAGE = new Set(["c", "y", "Y", "l"]);
+
+function portraitFor(
+  cell: MapCell,
+  look: SeasonLook,
+): { name: PortraitName; label: string } {
   if (cell.burning) return { name: "fire", label: "Pixel-art picture of fire" };
   if (cell.tree) {
     return cell.tree.health < 40
@@ -295,9 +305,10 @@ function portraitFor(cell: MapCell): { name: PortraitName; label: string } {
       : { name: "tree", label: "Pixel-art picture of a tree" };
   }
   if (cell.growth !== undefined) {
-    if (cell.growth >= 5 / 6)
+    const growth = (cell.growth ?? 0) * look.crop;
+    if (growth >= 5 / 6)
       return { name: "cropRipe", label: "Pixel-art picture of ripe crops" };
-    if (cell.growth < 1 / 6)
+    if (growth < 1 / 6)
       return { name: "cropSown", label: "Pixel-art picture of a sown field" };
     return {
       name: "cropGrowing",
@@ -381,7 +392,7 @@ export function TilePortrait({
   /** The whole tile is one of the solid winter drifts. */
   buried?: boolean;
 }) {
-  const { name, label } = portraitFor(cell);
+  const { name, label } = portraitFor(cell, look);
   if (buried) {
     return (
       <svg
@@ -397,6 +408,7 @@ export function TilePortrait({
   }
   const living = name === "tree" || name === "treeHurt" || name === "grass";
   const amount = living ? brownBlend(cell.moisture) : 0;
+  const crop = CROP_PORTRAIT.has(name);
   const pixels = portraits[name].flatMap((row, y) =>
     [...row].flatMap((color, x) => {
       if (color === ".") return [];
@@ -405,6 +417,13 @@ export function TilePortrait({
         LEAF.has(color) &&
         look.cover < 0.98 &&
         (x * 5 + y * 3 + 7) % 100 >= Math.round(look.cover * 100)
+      )
+        return [];
+      if (
+        crop &&
+        CROP_FOLIAGE.has(color) &&
+        look.crop < 0.98 &&
+        (x * 5 + y * 3 + 7) % 100 >= Math.round(look.crop * 100)
       )
         return [];
       return [{ id: `${x}-${y}`, x, y, color }];
@@ -416,9 +435,11 @@ export function TilePortrait({
         "#3a2a1c",
         1 - look.cover,
       )
-    : name === "water"
-      ? mixHex(backdrop.water, "#d5e6f0", ice)
-      : backdrop[name];
+    : crop
+      ? mixHex(backdrop[name], "#3a2a1c", 1 - look.crop)
+      : name === "water"
+        ? mixHex(backdrop.water, "#d5e6f0", ice)
+        : backdrop[name];
   const flakes =
     snow >= 0.045 && name !== "water" && name !== "fire"
       ? Array.from(

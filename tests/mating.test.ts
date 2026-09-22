@@ -300,6 +300,7 @@ test("the played world keeps a courting pair still, then separates the family fo
   assert.ok(
     parents.events.some((event) => event.message === "1 Mossling was born."),
   );
+  assert.equal(parents.snapshot().resources.born, 1);
   assert.equal(parentA.ritual?.phase, "family");
 
   parents.advanceTo(MONTH_SECONDS * 2);

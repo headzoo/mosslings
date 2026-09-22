@@ -161,6 +161,7 @@ test("winter buries a few connected drifts and leaves the speckled snow alone", 
     autumn: 0,
     snow: 0.45,
     ice: 0.9,
+    crop: 0,
   };
   const field = map(40, 28, { elevation: 0.75 });
   const buried: number[] = [];

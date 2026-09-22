@@ -1,16 +1,12 @@
 import { type CSSProperties, useState } from "react";
-import { MONTH_SECONDS } from "@/lib/game-time";
+import { MONTH_SECONDS, type Season } from "@/lib/game-time";
 import { HelpModal } from "./HelpModal";
-import { PixelIcon } from "./PixelIcon";
+import { PixelIcon, seasonSunIcon } from "./PixelIcon";
 import { useMusic } from "./useMusic";
-export function Year({
-  year = 1,
-  season = "Summer",
+export function CalendarHeartbeat({
   rate = 1,
   isPlaying = true,
 }: {
-  year?: number;
-  season?: string;
   rate?: number;
   isPlaying?: boolean;
 }) {
@@ -18,20 +14,35 @@ export function Year({
     "--heartbeat-duration": `${MONTH_SECONDS / rate}s`,
   } as CSSProperties;
   return (
+    <div
+      className="calendar-heartbeat"
+      data-playing={isPlaying}
+      style={heartbeatStyle}
+      aria-hidden="true"
+    >
+      <PixelIcon name="heart" />
+    </div>
+  );
+}
+export function Year({
+  year = 1,
+  season = "Summer",
+  rate = 1,
+  isPlaying = true,
+}: {
+  year?: number;
+  season?: Season;
+  rate?: number;
+  isPlaying?: boolean;
+}) {
+  return (
     <div className="year panel">
-      <PixelIcon name="sun" />
+      <PixelIcon name={seasonSunIcon(season)} />
       <div className="year-date">
         <span>Year {year}</span>
         <span>{season}</span>
       </div>
-      <div
-        className="calendar-heartbeat"
-        data-playing={isPlaying}
-        style={heartbeatStyle}
-        aria-hidden="true"
-      >
-        <PixelIcon name="heart" />
-      </div>
+      <CalendarHeartbeat rate={rate} isPlaying={isPlaying} />
     </div>
   );
 }

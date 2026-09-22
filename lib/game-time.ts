@@ -73,12 +73,14 @@ export interface SeasonLook {
   snow: number;
   /** 0 is open water. 1 is a white-blue sheet of ice. */
   ice: number;
+  /** 0 is a fallow field. 1 is a full summer stand. */
+  crop: number;
 }
 
 /** Repaint steps inside one season. Four keeps the map from redrawing every frame. */
 export const FOLIAGE_STEPS = 4;
 
-function yearProgress(elapsedSeconds: number) {
+export function yearProgress(elapsedSeconds: number) {
   const elapsed = Math.max(0, elapsedSeconds);
   const within = elapsed - Math.floor(elapsed / YEAR_SECONDS) * YEAR_SECONDS;
   const rawIndex = rawSeasonIndex(within);
@@ -103,15 +105,17 @@ export function foliageAt(elapsedSeconds: number): SeasonLook {
         autumn: 0,
         snow: into < 0.35 ? (1 - into / 0.35) * 0.5 : 0,
         ice: 1 - into,
+        crop: into,
       };
     case "Summer":
-      return { cover: 1, autumn: 0, snow: 0, ice: 0 };
+      return { cover: 1, autumn: 0, snow: 0, ice: 0, crop: 1 };
     case "Autumn":
       return {
         cover: into < 0.5 ? 1 : 1 - ((into - 0.5) / 0.5) * 0.92,
         autumn: into < 0.5 ? into / 0.5 : 1 - (into - 0.5) / 0.5,
         snow: 0,
         ice: into < 0.58 ? 0 : ((into - 0.58) / 0.42) * 0.42,
+        crop: 1 - into,
       };
     case "Winter":
       return {
@@ -122,6 +126,7 @@ export function foliageAt(elapsedSeconds: number): SeasonLook {
             ? (into / 0.15) * 0.2
             : 0.2 + ((into - 0.15) / 0.85) * 0.3,
         ice: 0.42 + into * 0.58,
+        crop: 0,
       };
   }
 }

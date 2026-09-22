@@ -1,4 +1,6 @@
 import { foliageAt, MONTH_SECONDS, type SeasonLook } from "./game-time";
+
+export type { SeasonLook } from "./game-time";
 import { plagueShade } from "./god/disease";
 import type { MapCell, MapData } from "./map";
 import { brownBlend, mixHex } from "./vegetation";
@@ -44,15 +46,29 @@ export interface PreviewMossling {
   ritual?: MatingRitual;
 }
 
+export type CreatePreviewMosslingsOptions = {
+  startId?: number;
+  occupied?: ReadonlySet<number>;
+};
+
 // Display fixtures only: these are not genomes or simulated organisms.
-export function createPreviewMosslings(map: MapData): PreviewMossling[] {
+export function createPreviewMosslings(
+  map: MapData,
+  {
+    startId = 0,
+    occupied = new Set<number>(),
+  }: CreatePreviewMosslingsOptions = {},
+): PreviewMossling[] {
   let state = map.seed;
   const random = () => {
     state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
     return state / 4294967296;
   };
   const land = map.cells.flatMap((cell, index) =>
-    cell.terrain === "grass" || cell.terrain === "dirt" ? [index] : [],
+    (cell.terrain === "grass" || cell.terrain === "dirt") &&
+    !occupied.has(index)
+      ? [index]
+      : [],
   );
   const count = Math.min(
     land.length,
@@ -68,25 +84,33 @@ export function createPreviewMosslings(map: MapData): PreviewMossling[] {
     ["#ffad35", "#f1df80", "#e4672f"],
   ];
   // Sample without replacement so the counter matches visible organisms.
-  return Array.from({ length: count }, (_, id) => {
-    const choice = id + Math.floor(random() * (land.length - id));
-    [land[id], land[choice]] = [land[choice], land[id]];
+  return Array.from({ length: count }, (_, offset) => {
+    const choice = offset + Math.floor(random() * (land.length - offset));
+    [land[offset], land[choice]] = [land[choice], land[offset]];
     return {
-      id,
+      id: startId + offset,
       health: 100,
-      cellIndex: land[id],
+      cellIndex: land[offset],
       colors: palettes[Math.floor(random() * palettes.length)],
       pattern: Math.floor(random() * 6),
     };
   });
 }
 
+const FALLOW_CROP = "#5c4030";
+
 /** Minimap color for a crop, from fresh green to ripe gold. */
-export function cropColor(growth: number): string {
-  if (growth >= 1) return "#e0a83a";
-  if (growth >= 4 / 6) return "#6aa336";
-  if (growth >= 2 / 6) return "#4ea234";
-  return "#3c8c32";
+export function cropColor(
+  growth: number,
+  look: SeasonLook = SUMMER_LOOK,
+): string {
+  const effective = growth * look.crop;
+  let color: string;
+  if (effective >= 1) color = "#e0a83a";
+  else if (effective >= 4 / 6) color = "#6aa336";
+  else if (effective >= 2 / 6) color = "#4ea234";
+  else color = "#3c8c32";
+  return look.crop < 1 ? mixHex(FALLOW_CROP, color, look.crop) : color;
 }
 
 function cropStage(growth: number): number {
@@ -162,8 +186,9 @@ function paintCropRows(
   x: number,
   y: number,
   growth: number,
+  look: SeasonLook = SUMMER_LOOK,
 ) {
-  const stage = cropStage(growth);
+  const stage = cropStage(growth * look.crop);
   if (stage <= 0) return;
   const dot = "#e07a18";
   if (stage === 1) {
@@ -235,6 +260,7 @@ export const SUMMER_LOOK: SeasonLook = {
   autumn: 0,
   snow: 0,
   ice: 0,
+  crop: 1,
 };
 
 /**
@@ -280,7 +306,7 @@ export function terrainColor(
   if (cell.damage === "burned") return "#3b3027";
   if (cell.damage === "crater") return "#413b37";
   if (cell.tree) return treePaintColor(cell.moisture, "fill", look);
-  if (cell.growth !== undefined) return cropColor(cell.growth);
+  if (cell.growth !== undefined) return cropColor(cell.growth, look);
   let hash = Math.imul(index + 1, 0x45d9f3b);
   hash = Math.imul(hash ^ (hash >>> 16), 0x45d9f3b);
   const variation = (((hash ^ (hash >>> 16)) >>> 0) % 9) - 4;
@@ -638,7 +664,7 @@ export function paintCell(
     !cell.burning &&
     !cell.damage
   )
-    paintCropRows(context, x, y, cell.growth);
+    paintCropRows(context, x, y, cell.growth, look);
   if (tileSize > 1 && cell.tree) paintTree(context, x, y, cell.moisture, look);
   if (
     tileSize > 1 &&

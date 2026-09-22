@@ -5,6 +5,7 @@ import {
   type AdvisoryMemory,
   type AdvisoryWorld,
   EMPTY_ADVISORY_MEMORY,
+  HEALTH_ADVISORY_BELOW,
   stepAdvisory,
 } from "../lib/advisories";
 import { CROP_GROW_MOISTURE } from "../lib/crops";
@@ -46,8 +47,8 @@ function world(patch: {
       killed: 0,
       food: crops.filter((crop) => crop.growth >= 1).length,
       trees: 0,
-      stone: 0,
-      water: 0,
+      destroyed: 0,
+      born: 0,
       health: living.length
         ? Math.round(
             living.reduce(
@@ -163,6 +164,30 @@ test("a moist dark field asks for sun, and a dry field still asks for rain first
     }),
   );
   assert.equal(dry.kind, "dry");
+});
+
+test("small health drops above the advisory threshold stay quiet", () => {
+  const fed = world({
+    mosslings: [
+      { id: 1, cellIndex: 0, health: 100, colors: ["#ffe632"], pattern: 0 },
+    ],
+  });
+  const opened = show(fed);
+  const hungry = world({
+    mosslings: [
+      {
+        id: 1,
+        cellIndex: 0,
+        health: 98,
+        hungry: true,
+        colors: ["#ffe632"],
+        pattern: 0,
+      },
+    ],
+    resources: { health: 98 },
+  });
+  assert.equal(show(hungry, opened.memory, 1).kind, null);
+  assert.ok(HEALTH_ADVISORY_BELOW > 98);
 });
 
 test("falling health warns only while Mosslings are hungry", () => {
@@ -289,13 +314,13 @@ test("health stays on cooldown between months until it recovers", () => {
       {
         id: 1,
         cellIndex: 0,
-        health: 80,
+        health: 70,
         hungry: true,
         colors: ["#ffe632"],
         pattern: 0,
       },
     ],
-    resources: { health: 80 },
+    resources: { health: 70 },
   });
   const dropped = show(weakened, opened.memory, 1);
   assert.equal(dropped.kind, "health");

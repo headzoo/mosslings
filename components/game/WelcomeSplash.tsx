@@ -4,17 +4,57 @@ import Image from "next/image";
 import { useLayoutEffect, useRef, useState } from "react";
 
 export const WELCOME_PREFERENCE = "mosslings:hide-welcome";
+export const INTRO_PREFERENCE = "mosslings:hide-intro";
+export const CROPS_INTRO_PREFERENCE = "mosslings:hide-crops-intro";
 
-export function forgetWelcomeDismissal() {
-  localStorage.removeItem(WELCOME_PREFERENCE);
+function clearStoredPreference(key: string) {
+  localStorage.removeItem(key);
   const store = (
     window as Window & {
       cookieStore?: { delete: (name: string) => Promise<void> };
     }
   ).cookieStore;
-  if (store) void store.delete(WELCOME_PREFERENCE);
+  if (store) void store.delete(key);
   // biome-ignore lint/suspicious/noDocumentCookie: expire the same preference if it was stored as a cookie
-  document.cookie = `${WELCOME_PREFERENCE}=; Max-Age=0; path=/; SameSite=Lax`;
+  document.cookie = `${key}=; Max-Age=0; path=/; SameSite=Lax`;
+}
+
+export function isIntroDismissed() {
+  try {
+    return localStorage.getItem(INTRO_PREFERENCE) === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function rememberIntroDismissal() {
+  localStorage.setItem(INTRO_PREFERENCE, "true");
+}
+
+export function forgetIntroDismissal() {
+  clearStoredPreference(INTRO_PREFERENCE);
+}
+
+export function isCropIntroDismissed() {
+  try {
+    return localStorage.getItem(CROPS_INTRO_PREFERENCE) === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function rememberCropIntroDismissal() {
+  localStorage.setItem(CROPS_INTRO_PREFERENCE, "true");
+}
+
+export function forgetCropIntroDismissal() {
+  clearStoredPreference(CROPS_INTRO_PREFERENCE);
+}
+
+export function forgetWelcomeDismissal() {
+  clearStoredPreference(WELCOME_PREFERENCE);
+  forgetIntroDismissal();
+  forgetCropIntroDismissal();
 }
 
 export function WelcomeSplash({
@@ -101,9 +141,9 @@ export function WelcomeSplash({
         <h2>Your world. Their little lives.</h2>
         <p>
           This is a living sandbox. You shape the land; the Mosslings wander
-          through it. Bring rain, plant crops, or unleash a disaster and see
-          how they respond. There’s no score to chase. Experiment, observe, and
-          see what happens.
+          through it. Bring rain, plant crops, or unleash a disaster and see how
+          they respond. There’s no score to chase. Experiment, observe, and see
+          what happens.
         </p>
         <ul className="welcome-hints">
           <li>

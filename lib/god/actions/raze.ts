@@ -13,7 +13,9 @@ function sow(world: GodContext, cell: MapCell) {
   if (cell.growth === undefined) {
     cell.growth = 0;
     cell.moisture = 1;
+    return true;
   }
+  return false;
 }
 
 export const raze: GodAction = {
@@ -45,8 +47,9 @@ export const raze: GodAction = {
           : (cell.terrain === "grass" || cell.terrain === "dirt") &&
             !cell.tree &&
             !cell.burning,
-    ))
-      sow(world, world.map.cells[index]);
+    )) {
+      if (sow(world, world.map.cells[index])) e.hit.add(index);
+    }
   },
   draw(e, painter) {
     ring(

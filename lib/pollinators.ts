@@ -1,7 +1,7 @@
 import type { Season } from "./game-time";
 import type { MapCell, MapData } from "./map";
 
-export const MAX_POLLINATORS = 12;
+export const MAX_POLLINATORS = 24;
 
 export type PollinatorKind = "bee" | "butterfly";
 
@@ -58,7 +58,7 @@ function spec(seed: number, slot: number, homeIndex: number): Pollinator {
   };
 }
 
-/** Up to twelve pollinators on greenery, chosen once from the map seed. */
+/** Up to twenty-four pollinators on greenery, chosen once from the map seed. */
 export function pollinatorsForMap(map: MapData): Pollinator[] {
   const homes: number[] = [];
   map.cells.forEach((cell, index) => {

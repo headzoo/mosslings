@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   advanceCrops,
+  cropFoodSupply,
   CROP_MOISTURE_LOSS,
   CROP_WILT_MOISTURE,
   plantStarterFields,
-  ripeTiles,
 } from "../lib/crops";
 import { MONTH_SECONDS, SEASON_SECONDS } from "../lib/game-time";
 import {
@@ -150,7 +150,7 @@ test("a field planted with crops ripens after six wet and lit months", () => {
   }
   world.map.cells[4].moisture = 1;
   world.map.cells[4].light = 1;
-  world.advanceTo(3 * SEASON_SECONDS);
+  world.advanceTo(4 * SEASON_SECONDS);
   assert.equal(world.map.cells[4].growth, 1);
 });
 
@@ -169,7 +169,7 @@ test("six wet and lit months ripen a planting, darkness stalls it, drought takes
     wet.map.cells[4].light = 1;
     wet.advanceTo(month * MONTH_SECONDS);
   }
-  wet.advanceTo(3 * SEASON_SECONDS);
+  wet.advanceTo(4 * SEASON_SECONDS);
   assert.equal(wet.map.cells[4].growth, 1);
   assert.equal(wet.snapshot().resources.food, 1);
 
@@ -284,13 +284,14 @@ test("winter holds a ripe field without feeding or withering, then spring counts
   const held = fixture(3, 3);
   held.cells[4].growth = 0.5;
   held.cells[4].moisture = CROP_WILT_MOISTURE + CROP_MOISTURE_LOSS;
-  assert.equal(advanceCrops(held, "Winter"), 0);
+  assert.equal(advanceCrops(held, 0), 0);
   assert.equal(held.cells[4].growth, 0.5);
   assert.equal(held.cells[4].moisture, CROP_WILT_MOISTURE + CROP_MOISTURE_LOSS);
   held.cells[4].growth = 1;
   held.cells[4].moisture = 1;
-  assert.equal(ripeTiles(held, "Winter"), 0);
-  assert.equal(ripeTiles(held, "Autumn"), 1);
+  assert.equal(cropFoodSupply(held, 0), 0);
+  assert.equal(cropFoodSupply(held, 1), 1);
+  assert.equal(cropFoodSupply(held, 0.5), 0.5);
 
   const map = fixture(3, 3);
   map.cells[4].growth = 1;
@@ -306,7 +307,7 @@ test("winter holds a ripe field without feeding or withering, then spring counts
   assert.equal(world.map.cells[4].growth, 1);
   assert.equal(world.map.cells[4].moisture, moisture);
   assert.equal(world.snapshot().resources.food, 0);
-  world.advanceTo(SEASON_SECONDS * 3);
+  world.advanceTo(SEASON_SECONDS * 4);
   assert.equal(world.map.cells[4].growth, 1);
   assert.equal(world.snapshot().resources.food, 1);
 });
@@ -317,7 +318,7 @@ test("full health lasts a foodless winter, and a weak Mossling starves", () => {
   fed.cells[2].moisture = 1;
   fed.cells[2].light = 1;
   const world = new GodWorld(fed, [mossling(0, 1, readings(50, 50))]);
-  world.advanceTo(SEASON_SECONDS + MONTH_SECONDS);
+  world.advanceTo(SEASON_SECONDS);
   assert.equal(world.snapshot().resources.food, 1);
   assert.equal(world.mosslings[0]?.health, 100);
   world.advanceTo(SEASON_SECONDS * 2 + MONTH_SECONDS);
