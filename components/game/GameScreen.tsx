@@ -15,16 +15,20 @@ import {
   stepAdvisory,
 } from "@/lib/advisories";
 import { GOD_ACTIONS } from "@/lib/god/actions";
+import { EFFECT_CAP_MESSAGE } from "@/lib/god/engine";
 import type { PowerId } from "@/lib/god/types";
 import type { MapCell, MapData } from "@/lib/map";
 import { getCamera } from "@/lib/map-camera";
 import type { PreviewMossling } from "@/lib/map-preview";
-import { EventLog } from "./EventLog";
+import { groupSpecies, nearestMember, type SpeciesGroup } from "@/lib/species";
 import { GameMap, Minimap } from "./GameMap";
 import { GodControls } from "./GodControls";
 import { GodEffects } from "./GodEffects";
 import { Health } from "./Health";
 import { LoreBoard, NEWS_MS, type NewsFlash } from "./LoreBoard";
+import { Pollinators } from "./Pollinators";
+import { SkyClouds } from "./SkyClouds";
+import { SpeciesList } from "./SpeciesList";
 import { TileInspector } from "./TileInspector";
 import { PlayControls, Year } from "./TimeControls";
 import { useGameTime } from "./useGameTime";
@@ -38,6 +42,7 @@ type TileSelection = {
   y: number;
   cell: MapCell;
   mossling?: PreviewMossling;
+  speciesKey?: string;
 };
 
 function snapshotCell(cell: MapCell): MapCell {
@@ -58,12 +63,13 @@ export function GameScreen({
   onRestoreWelcome: () => void;
 }) {
   const gameTime = useGameTime(suspended);
-  const { map, mosslings, engine, cast, events, resources } = useGodWorld(
-    initialMap,
-    initialMosslings,
-    gameTime.getDate,
-    gameTime.getElapsed,
-  );
+  const { map, mosslings, engine, cast, events, resources, revisionRef } =
+    useGodWorld(
+      initialMap,
+      initialMosslings,
+      gameTime.getDate,
+      gameTime.getElapsed,
+    );
   const [power, setPower] = useState<PowerId | null>(null);
   const [placementMessage, setPlacementMessage] = useState("");
   const [placementTooltip, setPlacementTooltip] = useState<{
@@ -108,13 +114,14 @@ export function GameScreen({
       setFlash({ id: ++flashId.current, kind: step.kind });
     }
   }, [map, mosslings, resources, events]);
-  const [isDragging, setIsDragging] = useState(false);
-  const drag = useRef<{
+  const stroke = useRef<{
+    painting: boolean;
     moved: boolean;
     x: number;
     y: number;
-    centerX: number;
-    centerY: number;
+    lastIndex: number | null;
+    announced: boolean;
+    stopped: boolean;
   } | null>(null);
   const attachBoard = useCallback(
     (node: HTMLDivElement | null) => {
@@ -157,57 +164,149 @@ export function GameScreen({
     };
   }, [zoom]);
   const camera = map ? getCamera(map, viewport, tileSize, center) : null;
-  const selectAt = (clientX: number, clientY: number) => {
-    if (!map || !camera || !viewportRef.current) return;
+  const tileAt = (clientX: number, clientY: number) => {
+    if (!map || !camera || !viewportRef.current) return null;
     const rect = viewportRef.current.getBoundingClientRect();
     const x = Math.floor((clientX - rect.left - camera.left) / tileSize);
     const y = Math.floor((clientY - rect.top - camera.top) / tileSize);
-    if (x >= 0 && y >= 0 && x < map.width && y < map.height) {
-      if (power) {
-        const message = cast(power, x, y);
-        if (
-          !message &&
-          (power === "fire" ||
-            power === "tornado" ||
-            power === "quake" ||
-            power === "lightning" ||
-            power === "meteor")
-        ) {
-          newsUntil.current = performance.now() + NEWS_MS;
-          setFlash({
-            id: ++flashId.current,
-            kind: power,
-            x,
-            y,
-            mapWidth: map.width,
-            mapHeight: map.height,
-          });
-        }
-        if (power === "grow" && message) {
-          setPlacementTooltip({ message, x, y });
-          setPlacementMessage("");
-        } else {
-          setPlacementTooltip(null);
-          setPlacementMessage(
-            message ??
-              `${GOD_ACTIONS[power].label} placed. Choose another spot, or Esc to cancel.`,
-          );
-        }
-        return;
-      }
-      const index = y * map.width + x;
-      const mossling = mosslings.find((m) => m.cellIndex === index);
-      setSelection({
-        seed: map.seed,
-        index,
-        x,
-        y,
-        cell: snapshotCell(map.cells[index]),
-        mossling: mossling ? { ...mossling } : undefined,
-      });
-    }
+    if (x < 0 || y < 0 || x >= map.width || y >= map.height) return null;
+    return { x, y, index: y * map.width + x };
   };
+  const flashDisaster = (kind: PowerId, x: number, y: number) => {
+    if (
+      !map ||
+      (kind !== "fire" &&
+        kind !== "tornado" &&
+        kind !== "quake" &&
+        kind !== "lightning" &&
+        kind !== "meteor")
+    )
+      return;
+    newsUntil.current = performance.now() + NEWS_MS;
+    setFlash({
+      id: ++flashId.current,
+      kind,
+      x,
+      y,
+      mapWidth: map.width,
+      mapHeight: map.height,
+    });
+  };
+  const placePower = (x: number, y: number, quiet: boolean) => {
+    if (!power || !map) return false;
+    const message = cast(power, x, y, quiet ? { quiet: true } : undefined);
+    if (message === EFFECT_CAP_MESSAGE) {
+      if (!quiet && power === "raze") {
+        setPlacementTooltip({ message, x, y });
+        setPlacementMessage("");
+      } else {
+        setPlacementTooltip(null);
+        setPlacementMessage(message);
+      }
+      return true;
+    }
+    if (quiet) {
+      if (message || stroke.current?.announced) return false;
+      if (stroke.current) stroke.current.announced = true;
+      setPlacementTooltip(null);
+      setPlacementMessage(
+        `${GOD_ACTIONS[power].label} placed. Choose another spot, or Esc to cancel.`,
+      );
+      flashDisaster(power, x, y);
+      return false;
+    }
+    if (stroke.current) stroke.current.announced = !message;
+    if (!message) flashDisaster(power, x, y);
+    if (power === "raze" && message) {
+      setPlacementTooltip({ message, x, y });
+      setPlacementMessage("");
+    } else {
+      setPlacementTooltip(null);
+      setPlacementMessage(
+        message ??
+          `${GOD_ACTIONS[power].label} placed. Choose another spot, or Esc to cancel.`,
+      );
+    }
+    return false;
+  };
+  const selectAt = (clientX: number, clientY: number) => {
+    const tile = tileAt(clientX, clientY);
+    if (!tile || !map) return;
+    if (power) {
+      placePower(tile.x, tile.y, false);
+      return;
+    }
+    const mossling = mosslings.find((m) => m.cellIndex === tile.index);
+    setSelection({
+      seed: map.seed,
+      index: tile.index,
+      x: tile.x,
+      y: tile.y,
+      cell: snapshotCell(map.cells[tile.index]),
+      mossling: mossling ? { ...mossling } : undefined,
+    });
+  };
+  const selectSpecies = (group: SpeciesGroup) => {
+    if (!map) return;
+    const focus = camera
+      ? {
+          x: camera.x + camera.width / 2,
+          y: camera.y + camera.height / 2,
+        }
+      : { x: 0, y: 0 };
+    const member =
+      nearestMember(group.members, map.width, focus) ?? group.members[0];
+    const cell = member ? map.cells[member.cellIndex] : undefined;
+    if (!member || !cell) return;
+    setSelection({
+      seed: map.seed,
+      index: member.cellIndex,
+      x: member.cellIndex % map.width,
+      y: Math.floor(member.cellIndex / map.width),
+      cell: snapshotCell(cell),
+      mossling: { ...member },
+      speciesKey: group.key,
+    });
+  };
+  useEffect(() => {
+    if (!map || !selection?.speciesKey || selection.seed !== map.seed) return;
+    const group = groupSpecies(mosslings).find(
+      (item) => item.key === selection.speciesKey,
+    );
+    if (!group) {
+      setSelection(null);
+      return;
+    }
+    const opened = mosslings.find((item) => item.id === selection.mossling?.id);
+    if (opened && (opened.health ?? 100) > 0) return;
+    const focus = camera
+      ? {
+          x: camera.x + camera.width / 2,
+          y: camera.y + camera.height / 2,
+        }
+      : { x: 0, y: 0 };
+    const next = nearestMember(group.members, map.width, focus);
+    const cell = next ? map.cells[next.cellIndex] : undefined;
+    if (!next || !cell) {
+      setSelection(null);
+      return;
+    }
+    setSelection({
+      seed: map.seed,
+      index: next.cellIndex,
+      x: next.cellIndex % map.width,
+      y: Math.floor(next.cellIndex / map.width),
+      cell: snapshotCell(cell),
+      mossling: { ...next },
+      speciesKey: group.key,
+    });
+  }, [map, camera, mosslings, selection]);
   const selected = selection?.seed === map?.seed ? selection : null;
+  const species = groupSpecies(mosslings);
+  const highlighted = selected?.speciesKey
+    ? (species.find((group) => group.key === selected.speciesKey)?.members ??
+      [])
+    : [];
   return (
     <main className="game-screen">
       <header className="game-header">
@@ -254,9 +353,8 @@ export function GameScreen({
             <button
               type="button"
               className="camera-surface"
-              data-dragging={isDragging}
               data-targeting={!!power}
-              aria-label="Map camera: click a tile to inspect, drag to pan, use plus and minus to zoom"
+              aria-label="Map camera: click a tile to inspect, use plus and minus to zoom"
               onClick={(event) => {
                 if (event.detail === 0 && viewportRef.current) {
                   const rect = viewportRef.current.getBoundingClientRect();
@@ -317,61 +415,58 @@ export function GameScreen({
               }}
               onPointerDown={(event) => {
                 if (!map || !camera || event.button !== 0) return;
-                setIsDragging(false);
                 event.currentTarget.setPointerCapture(event.pointerId);
-                drag.current = {
+                const tile = tileAt(event.clientX, event.clientY);
+                stroke.current = {
+                  painting: !!power,
                   moved: false,
                   x: event.clientX,
                   y: event.clientY,
-                  centerX: camera.x + camera.width / 2,
-                  centerY: camera.y + camera.height / 2,
+                  lastIndex: tile?.index ?? null,
+                  announced: false,
+                  stopped: false,
                 };
+                if (power && tile)
+                  stroke.current.stopped = placePower(tile.x, tile.y, false);
               }}
               onPointerMove={(event) => {
-                if (!drag.current || !map || !camera) return;
+                if (!stroke.current) return;
                 if (
-                  !drag.current.moved &&
+                  !stroke.current.moved &&
                   Math.hypot(
-                    event.clientX - drag.current.x,
-                    event.clientY - drag.current.y,
+                    event.clientX - stroke.current.x,
+                    event.clientY - stroke.current.y,
                   ) > 5
-                ) {
-                  drag.current.moved = true;
-                  setIsDragging(true);
-                }
-                if (!drag.current.moved) return;
-                const x =
-                  drag.current.centerX -
-                  (event.clientX - drag.current.x) / tileSize;
-                const y =
-                  drag.current.centerY -
-                  (event.clientY - drag.current.y) / tileSize;
-                setCenter({
-                  x:
-                    Math.max(
-                      camera.width / 2,
-                      Math.min(map.width - camera.width / 2, x),
-                    ) / map.width,
-                  y:
-                    Math.max(
-                      camera.height / 2,
-                      Math.min(map.height - camera.height / 2, y),
-                    ) / map.height,
-                });
+                )
+                  stroke.current.moved = true;
+                if (
+                  !power ||
+                  !map ||
+                  !camera ||
+                  !stroke.current.painting ||
+                  !stroke.current.moved ||
+                  stroke.current.stopped
+                )
+                  return;
+                const tile = tileAt(event.clientX, event.clientY);
+                if (!tile || tile.index === stroke.current.lastIndex) return;
+                stroke.current.lastIndex = tile.index;
+                stroke.current.stopped = placePower(tile.x, tile.y, true);
               }}
               onPointerUp={(event) => {
-                if (drag.current && !drag.current.moved)
+                if (
+                  stroke.current &&
+                  !stroke.current.painting &&
+                  !stroke.current.moved
+                )
                   selectAt(event.clientX, event.clientY);
-                drag.current = null;
-                setIsDragging(false);
+                stroke.current = null;
               }}
               onPointerCancel={() => {
-                drag.current = null;
-                setIsDragging(false);
+                stroke.current = null;
               }}
               onLostPointerCapture={() => {
-                drag.current = null;
-                setIsDragging(false);
+                stroke.current = null;
               }}
             >
               <span className="sr-only">Map camera</span>
@@ -381,6 +476,7 @@ export function GameScreen({
                 map={map}
                 mosslings={mosslings}
                 elapsed={gameTime.getElapsed}
+                revisionRef={revisionRef}
                 style={{
                   position: "absolute",
                   width: map.width * tileSize,
@@ -392,6 +488,54 @@ export function GameScreen({
               />
             ) : (
               <p className="map-loading">Growing a little world…</p>
+            )}
+            {map && camera && highlighted.length > 0 && (
+              <div
+                className="species-highlights"
+                style={{
+                  left: camera.left,
+                  top: camera.top,
+                  width: map.width * tileSize,
+                  height: map.height * tileSize,
+                }}
+              >
+                {highlighted.map((mossling) => (
+                  <span
+                    key={mossling.id}
+                    className="species-highlight"
+                    style={{
+                      left: (mossling.cellIndex % map.width) * tileSize,
+                      top:
+                        Math.floor(mossling.cellIndex / map.width) * tileSize,
+                      width: tileSize,
+                      height: tileSize,
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+            {map && camera && (
+              <Pollinators
+                map={map}
+                camera={camera}
+                tileSize={tileSize}
+                width={viewport.width}
+                height={viewport.height}
+                elapsed={gameTime.getElapsed}
+                revisionRef={revisionRef}
+              />
+            )}
+            {map && camera && (
+              <SkyClouds
+                seed={map.seed}
+                mapWidth={map.width}
+                mapHeight={map.height}
+                camera={camera}
+                tileSize={tileSize}
+                width={viewport.width}
+                height={viewport.height}
+                elapsed={gameTime.getElapsed}
+              />
             )}
             {engine && camera && (
               <GodEffects
@@ -448,10 +592,10 @@ export function GameScreen({
             {selected && (
               <TileInspector
                 seed={selected.seed}
-                index={selected.index}
                 x={selected.x}
                 y={selected.y}
                 cell={selected.cell}
+                map={map}
                 mossling={
                   selected.mossling
                     ? mosslings.find((m) => m.id === selected.mossling?.id)
@@ -466,13 +610,19 @@ export function GameScreen({
           <LoreBoard flash={flash} />
         </section>
         <aside className="world-sidebar">
-          <EventLog events={events} />
+          <SpeciesList
+            groups={species}
+            selectedKey={selected?.speciesKey ?? null}
+            onSelect={selectSpecies}
+          />
           <Minimap
             map={map}
             mosslings={mosslings}
             camera={camera}
             tileSize={tileSize}
             elapsed={gameTime.getElapsed}
+            revisionRef={revisionRef}
+            onCenter={(x, y) => setCenter({ x, y })}
           />
         </aside>
       </div>

@@ -1,5 +1,13 @@
+import { BROWN_MOISTURE } from "../../vegetation";
 import { effect, landOnly, noise, random } from "../shared";
 import type { GodAction, GodContext, GodEffect } from "../types";
+
+const FIRE_WET_RADIUS = 6;
+const FIRE_DRY_RADIUS = 10;
+const FIRE_WET_CAP = 70;
+const FIRE_DRY_CAP = 180;
+const FIRE_WET_SPREAD_AGE = 6;
+const FIRE_DRY_SPREAD_AGE = 8;
 
 function ignite(e: GodEffect, world: GodContext, index: number) {
   const cell = world.map.cells[index];
@@ -51,7 +59,8 @@ export const fire: GodAction = {
           : null)
     );
   },
-  create: (point, seed, id) => effect("fire", point, seed, id, 10, 6),
+  create: (point, seed, id) =>
+    effect("fire", point, seed, id, 10, FIRE_WET_RADIUS),
   update(e, world, dt) {
     if (e.step === 0) ignite(e, world, e.y * world.map.width + e.x);
     for (const [index, remaining] of [...e.marks]) {
@@ -71,7 +80,12 @@ export const fire: GodAction = {
         e.marks.delete(index);
         continue;
       }
-      if (e.age > 6 || e.step % 8 !== 0 || e.marks.size >= 70) continue;
+      if (
+        e.step % 8 !== 0 ||
+        e.age > FIRE_DRY_SPREAD_AGE ||
+        e.marks.size >= FIRE_DRY_CAP
+      )
+        continue;
       const x = index % world.map.width,
         y = Math.floor(index / world.map.width);
       for (const [dx, dy] of [
@@ -83,9 +97,16 @@ export const fire: GodAction = {
         const nx = x + dx,
           ny = y + dy;
         const next = world.cell(nx, ny);
+        if (!next) continue;
+        const dry = next.moisture <= BROWN_MOISTURE;
         if (
-          next &&
-          Math.hypot(nx - e.origin.x, ny - e.origin.y) <= e.radius &&
+          !dry &&
+          (e.age > FIRE_WET_SPREAD_AGE || e.marks.size >= FIRE_WET_CAP)
+        )
+          continue;
+        if (
+          Math.hypot(nx - e.origin.x, ny - e.origin.y) <=
+            (dry ? FIRE_DRY_RADIUS : e.radius) &&
           random(e) < 0.7 - next.moisture * 0.45
         )
           ignite(e, world, ny * world.map.width + nx);

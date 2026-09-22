@@ -5,8 +5,14 @@ import {
   CROP_MOISTURE_LOSS,
   CROP_WILT_MOISTURE,
   plantStarterFields,
+  ripeTiles,
 } from "../lib/crops";
-import { MONTH_SECONDS } from "../lib/game-time";
+import { MONTH_SECONDS, SEASON_SECONDS } from "../lib/game-time";
+import {
+  FOREST_SPREAD_MOISTURE,
+  FOREST_SPREAD_SECONDS,
+  WorldEcology,
+} from "../lib/god/ecology";
 import { GodWorld } from "../lib/god/engine";
 import type { MapData } from "../lib/map";
 import type { PreviewMossling } from "../lib/map-preview";
@@ -116,27 +122,54 @@ test("starter fields convert dirt when grass runs out", () => {
   assert.equal(map.cells[1].terrain, "rock");
 });
 
-test("grow plants a green field and leaves an existing crop's progress", () => {
+test("crops plants a green field and leaves an existing crop's progress", () => {
   const map = fixture(5, 5);
   for (const cell of map.cells) cell.terrain = "dirt";
   map.cells[12].growth = 0.5;
   const world = new GodWorld(map, []);
-  assert.equal(world.cast("grow", 2, 2), null);
+  assert.equal(world.cast("raze", 2, 2), null);
   assert.equal(world.map.cells[12].growth, 0.5);
   const planted = world.map.cells.filter((cell) => cell.growth === 0);
   assert.equal(planted.length, 7);
+  assert.equal(world.map.cells[12].moisture, 0.2);
+  for (const cell of planted) assert.equal(cell.moisture, 1);
   for (let i = 0; i < 40; i++) world.tick(0.05);
   assert.equal(world.map.cells.filter((cell) => cell.growth === 0).length, 7);
   assert.equal(world.map.cells[12].growth, 0.5);
 });
 
-test("six wet months ripen a planting, drought takes five years, and rain saves a parched field", () => {
+test("a field planted with crops ripens after six wet and lit months", () => {
+  const world = new GodWorld(fixture(3, 3), []);
+  assert.equal(world.cast("raze", 1, 1), null);
+  assert.equal(world.map.cells[4].growth, 0);
+  for (let month = 1; month <= 5; month++) {
+    world.map.cells[4].moisture = 1;
+    world.map.cells[4].light = 1;
+    world.advanceTo(month * MONTH_SECONDS);
+    assert.ok((world.map.cells[4].growth ?? 0) < 1);
+  }
+  world.map.cells[4].moisture = 1;
+  world.map.cells[4].light = 1;
+  world.advanceTo(3 * SEASON_SECONDS);
+  assert.equal(world.map.cells[4].growth, 1);
+});
+
+test("six wet and lit months ripen a planting, darkness stalls it, drought takes five years, and rain saves a parched field", () => {
+  const dark = new GodWorld(fixture(3, 3), []);
+  dark.map.cells[4].growth = 0;
+  dark.map.cells[4].moisture = 1;
+  dark.advanceTo(MONTH_SECONDS);
+  assert.equal(dark.map.cells[4].growth, 0);
+
   const wet = new GodWorld(fixture(3, 3), []);
   wet.map.cells[4].growth = 0;
+  wet.map.cells[4].light = 1;
   for (let month = 1; month <= 6; month++) {
     wet.map.cells[4].moisture = 1;
+    wet.map.cells[4].light = 1;
     wet.advanceTo(month * MONTH_SECONDS);
   }
+  wet.advanceTo(3 * SEASON_SECONDS);
   assert.equal(wet.map.cells[4].growth, 1);
   assert.equal(wet.snapshot().resources.food, 1);
 
@@ -163,6 +196,7 @@ test("six wet months ripen a planting, drought takes five years, and rain saves 
   const saved = new GodWorld(fixture(3, 3), []);
   saved.map.cells[4].growth = 0.5;
   saved.map.cells[4].moisture = 0.1;
+  saved.map.cells[4].light = 1;
   assert.equal(saved.cast("rain", 1, 1), null);
   saved.advanceTo(MONTH_SECONDS);
   assert.ok((saved.map.cells[4].growth ?? 0) > 0.5);
@@ -172,15 +206,36 @@ test("six wet months ripen a planting, drought takes five years, and rain saves 
   );
 });
 
+test("a dry patch planted with crops starts watered and stays a crop", () => {
+  const map = fixture(3, 3);
+  map.cells[4].terrain = "dirt";
+  map.cells[4].moisture = 0.05;
+  map.cells[3].tree = { health: 100 };
+  map.cells[3].moisture = 1;
+  const world = new GodWorld(map, []);
+  assert.equal(world.cast("raze", 1, 1), null);
+  assert.equal(world.map.cells[4].growth, 0);
+  assert.equal(world.map.cells[4].moisture, 1);
+  assert.equal(world.map.cells[4].tree, undefined);
+  world.advanceTo(3 * MONTH_SECONDS);
+  assert.equal(world.map.cells[4].growth, 0);
+  assert.equal(world.map.cells[4].tree, undefined);
+  assert.equal(
+    world.events.some((event) => event.message.includes("withered")),
+    false,
+  );
+});
+
 test("forest does not spread onto a crop tile", () => {
   const map = fixture(3, 3);
   map.cells[4].tree = { health: 100 };
+  map.cells[4].moisture = FOREST_SPREAD_MOISTURE;
   map.cells[5].growth = 0.4;
-  map.cells[5].moisture = 10;
-  const world = new GodWorld(map, []);
-  world.advanceTo(96);
-  assert.equal(world.map.cells[5].tree, undefined);
-  assert.equal(world.map.cells[5].growth !== undefined, true);
+  const ecology = new WorldEcology(map);
+  ecology.month(FOREST_SPREAD_SECONDS, new Set());
+  assert.equal(map.cells[5].tree, undefined);
+  assert.equal(map.cells[5].growth, 0.4);
+  assert.ok(map.cells[1].tree);
 });
 
 test("short fields weaken heavier eaters first and do not kill above a quarter tile", () => {
@@ -223,4 +278,67 @@ test("at a quarter tile per Mossling the hungriest starves", () => {
   assert.ok(
     world.events.some((event) => event.message === "1 Mossling starved."),
   );
+});
+
+test("winter holds a ripe field without feeding or withering, then spring counts it again", () => {
+  const held = fixture(3, 3);
+  held.cells[4].growth = 0.5;
+  held.cells[4].moisture = CROP_WILT_MOISTURE + CROP_MOISTURE_LOSS;
+  assert.equal(advanceCrops(held, "Winter"), 0);
+  assert.equal(held.cells[4].growth, 0.5);
+  assert.equal(held.cells[4].moisture, CROP_WILT_MOISTURE + CROP_MOISTURE_LOSS);
+  held.cells[4].growth = 1;
+  held.cells[4].moisture = 1;
+  assert.equal(ripeTiles(held, "Winter"), 0);
+  assert.equal(ripeTiles(held, "Autumn"), 1);
+
+  const map = fixture(3, 3);
+  map.cells[4].growth = 1;
+  map.cells[4].moisture = 1;
+  map.cells[4].light = 1;
+  const world = new GodWorld(map, []);
+  world.advanceTo(SEASON_SECONDS * 2);
+  assert.equal(world.map.cells[4].growth, 1);
+  const moisture = world.map.cells[4].moisture;
+  assert.ok(moisture > CROP_WILT_MOISTURE);
+  assert.equal(world.snapshot().resources.food, 0);
+  world.advanceTo(SEASON_SECONDS * 3 - 0.01);
+  assert.equal(world.map.cells[4].growth, 1);
+  assert.equal(world.map.cells[4].moisture, moisture);
+  assert.equal(world.snapshot().resources.food, 0);
+  world.advanceTo(SEASON_SECONDS * 3);
+  assert.equal(world.map.cells[4].growth, 1);
+  assert.equal(world.snapshot().resources.food, 1);
+});
+
+test("full health lasts a foodless winter, and a weak Mossling starves", () => {
+  const fed = fixture();
+  fed.cells[2].growth = 1;
+  fed.cells[2].moisture = 1;
+  fed.cells[2].light = 1;
+  const world = new GodWorld(fed, [mossling(0, 1, readings(50, 50))]);
+  world.advanceTo(SEASON_SECONDS + MONTH_SECONDS);
+  assert.equal(world.snapshot().resources.food, 1);
+  assert.equal(world.mosslings[0]?.health, 100);
+  world.advanceTo(SEASON_SECONDS * 2 + MONTH_SECONDS);
+  assert.equal(world.snapshot().resources.food, 0);
+  assert.ok((world.mosslings[0]?.health ?? 0) > 0);
+  assert.ok((world.mosslings[0]?.health ?? 100) < 100);
+  assert.equal(
+    world.events.some((event) => event.message.includes("starved")),
+    false,
+  );
+
+  const weakMap = fixture();
+  weakMap.cells[2].growth = 1;
+  weakMap.cells[2].moisture = 1;
+  weakMap.cells[2].light = 1;
+  const weak = new GodWorld(weakMap, [mossling(0, 1, readings(50, 50))]);
+  weak.advanceTo(SEASON_SECONDS + MONTH_SECONDS);
+  const entering = weak.mosslings[0];
+  assert.ok(entering);
+  entering.health = 10;
+  weak.advanceTo(SEASON_SECONDS * 3);
+  assert.equal(weak.snapshot().resources.mosslings, 0);
+  assert.ok(weak.events.some((event) => event.message.includes("starved")));
 });

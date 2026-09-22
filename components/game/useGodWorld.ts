@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { GameDate } from "@/lib/game-time";
 import { GodWorld, type WorldSnapshot } from "@/lib/god/engine";
 import type { PowerId } from "@/lib/god/types";
@@ -14,24 +14,28 @@ export function useGodWorld(
 ) {
   const [engine, setEngine] = useState<GodWorld | null>(null);
   const [snapshot, setSnapshot] = useState<WorldSnapshot | null>(null);
+  const revisionRef = useRef(0);
+  const dirtyRef = useRef(false);
   useEffect(() => {
     if (!map) return;
     const world = new GodWorld(map, mosslings, getDate);
+    revisionRef.current = world.revision;
+    dirtyRef.current = false;
     setEngine(world);
     setSnapshot(world.snapshot());
     let frame = 0,
       last = performance.now(),
-      dirty = false,
       sincePublish = 0;
     const animate = (now: number) => {
       const elapsed = Math.min(0.25, (now - last) / 1000);
       last = now;
-      dirty = world.advanceTo(getElapsed()) || dirty;
+      if (world.advanceTo(getElapsed())) dirtyRef.current = true;
+      revisionRef.current = world.revision;
       sincePublish += elapsed;
-      if (dirty && sincePublish >= 0.1) {
+      if (dirtyRef.current && sincePublish >= 0.1) {
         setSnapshot(world.snapshot());
         sincePublish = 0;
-        dirty = false;
+        dirtyRef.current = false;
       }
       frame = requestAnimationFrame(animate);
     };
@@ -39,11 +43,12 @@ export function useGodWorld(
     return () => cancelAnimationFrame(frame);
   }, [map, mosslings, getDate, getElapsed]);
   const cast = useCallback(
-    (power: PowerId, x: number, y: number) => {
+    (power: PowerId, x: number, y: number, tune?: { quiet?: boolean }) => {
       if (!engine) return "The world is still growing.";
-      engine.advanceTo(getElapsed());
-      const result = engine.cast(power, x, y);
-      setSnapshot(engine.snapshot());
+      const advanced = engine.advanceTo(getElapsed());
+      const result = engine.cast(power, x, y, tune);
+      if (advanced || result === null || !tune?.quiet) dirtyRef.current = true;
+      revisionRef.current = engine.revision;
       return result;
     },
     [engine, getElapsed],
@@ -51,7 +56,8 @@ export function useGodWorld(
   return {
     engine,
     cast,
-    map: snapshot?.map ?? map,
+    revisionRef,
+    map: engine?.map ?? map,
     mosslings: snapshot?.mosslings ?? mosslings,
     events: snapshot?.events ?? [],
     resources: snapshot?.resources ?? null,

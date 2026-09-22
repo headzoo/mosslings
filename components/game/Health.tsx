@@ -40,20 +40,20 @@ export function HealthMosslings({
 export function HealthFood({ value }: { value: number | null }) {
   return (
     <HealthStat
-      label="Food"
+      label="Crops"
       kind="food"
       value={value}
       description="Ripe crop tiles. One fully grown tile feeds about one Mossling."
     />
   );
 }
-export function HealthWood({ value }: { value: number | null }) {
+export function HealthTrees({ value }: { value: number | null }) {
   return (
     <HealthStat
-      label="Wood"
-      kind="wood"
+      label="Trees"
+      kind="trees"
       value={value}
-      description="Available wood: living trees weighted by health"
+      description="Living tree tiles on the map"
     />
   );
 }
@@ -95,7 +95,7 @@ export function Health({ resources }: { resources: WorldResources | null }) {
         killed={resources?.killed ?? null}
       />
       <HealthFood value={resources?.food ?? null} />
-      <HealthWood value={resources?.wood ?? null} />
+      <HealthTrees value={resources?.trees ?? null} />
       <HealthStone value={resources?.stone ?? null} />
       <HealthWater value={resources?.water ?? null} />
       <HealthVital value={resources?.health ?? null} />

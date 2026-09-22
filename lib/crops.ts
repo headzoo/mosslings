@@ -1,15 +1,23 @@
+import type { Season } from "./game-time";
 import type { MapCell, MapData } from "./map";
 import { type TraitReading, traitValue } from "./mossling-traits";
 
-/** At or above this, a wet month ripens the crop. */
+/** At or above this, a wet month can ripen the crop. */
 export const CROP_GROW_MOISTURE = 0.4;
+/** At or above this, a lit month can ripen the crop. */
+export const CROP_GROW_LIGHT = 0.4;
 /** At or below this, the crop dies. */
 export const CROP_WILT_MOISTURE = 0.16;
 /** A fully watered crop reaches the wilt line after five years without rain. */
 export const CROP_DROUGHT_MONTHS = 5 * 12;
 export const CROP_MOISTURE_LOSS =
   (1 - CROP_WILT_MOISTURE) / CROP_DROUGHT_MONTHS;
-/** Six wet months take a planting from sprout to ripe. */
+/**
+ * A full sun charge stays above the grow line for about a year.
+ * Darkness stalls a crop. It does not kill it.
+ */
+export const CROP_LIGHT_LOSS = 0.05;
+/** Six months that are both wet and lit take a planting from sprout to ripe. */
 export const CROP_GROWTH_STEP = 1 / 6;
 
 const NEIGHBORS = [
@@ -25,7 +33,8 @@ export function appetite(traits: readonly TraitReading[] | undefined): number {
   return 0.55 + ((metabolism + drive) / 200) * 0.9;
 }
 
-export function ripeTiles(map: MapData): number {
+export function ripeTiles(map: MapData, season: Season = "Summer"): number {
+  if (season === "Winter") return 0;
   let count = 0;
   for (const cell of map.cells) if (isRipe(cell)) count++;
   return count;
@@ -35,19 +44,31 @@ export function isRipe(cell: MapCell): boolean {
   return (cell.growth ?? 0) >= 1 && !cell.burning && !cell.damage && !cell.tree;
 }
 
-/** Ripen wet crops and clear those that have gone too dry. Returns how many died. */
-export function advanceCrops(map: MapData): number {
+/**
+ * Ripen crops that are both wet and lit, and clear those that have gone too dry.
+ * Winter holds every field as it is: no growth, no wilt, and no food until spring.
+ * Returns how many died.
+ */
+export function advanceCrops(map: MapData, season: Season = "Summer"): number {
+  if (season === "Winter") return 0;
   let withered = 0;
   for (const cell of map.cells) {
     if (cell.growth === undefined || cell.burning || cell.damage || cell.tree)
       continue;
     cell.moisture = Math.max(0, cell.moisture - CROP_MOISTURE_LOSS);
+    const light = Math.max(0, (cell.light ?? 0) - CROP_LIGHT_LOSS);
+    cell.light = light < 1e-6 ? undefined : light;
     if (cell.moisture <= CROP_WILT_MOISTURE) {
       cell.growth = undefined;
       withered++;
       continue;
     }
-    if (cell.moisture < CROP_GROW_MOISTURE || cell.growth >= 1) continue;
+    if (
+      cell.moisture < CROP_GROW_MOISTURE ||
+      (cell.light ?? 0) < CROP_GROW_LIGHT ||
+      cell.growth >= 1
+    )
+      continue;
     cell.growth = Math.min(1, cell.growth + CROP_GROWTH_STEP);
     if (cell.growth > 1 - 1e-6) cell.growth = 1;
   }

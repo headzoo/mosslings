@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { plantStarterFields } from "@/lib/crops";
+import { plantStarterForests } from "@/lib/god/ecology";
 import { generateMap, type MapData, randomSeed } from "@/lib/map";
 import {
   createPreviewMosslings,
@@ -62,11 +63,9 @@ export function GameBootstrap() {
         rivers: { count: 1, minRadius: 1, maxRadius: 2 },
       });
       const mosslings = createPreviewMosslings(map);
-      plantStarterFields(
-        map,
-        mosslings.length,
-        new Set(mosslings.map((mossling) => mossling.cellIndex)),
-      );
+      const occupied = new Set(mosslings.map((mossling) => mossling.cellIndex));
+      plantStarterForests(map, occupied);
+      plantStarterFields(map, mosslings.length, occupied);
       setWorld({ map, mosslings });
     };
     const frame = requestAnimationFrame(measure);

@@ -162,7 +162,7 @@ export function createChiptune(): Chiptune {
   }
 
   function schedule() {
-    const horizon = ctx.currentTime + 0.18;
+    const horizon = ctx.currentTime + 0.5;
     while (nextTime < horizon) {
       const lead = LEAD[nextStep];
       const bass = BASS[nextStep];
@@ -211,7 +211,7 @@ export function createChiptune(): Chiptune {
         master.gain.setValueAtTime(MASTER_GAIN, ctx.currentTime);
         stopScheduler();
         schedule();
-        timer = window.setInterval(schedule, 40);
+        timer = window.setInterval(schedule, 100);
       })
       .catch(() => {
         armUnlock();

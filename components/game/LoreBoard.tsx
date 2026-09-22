@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { AdvisoryKind } from "@/lib/advisories";
+import { PixelIcon } from "./PixelIcon";
 
 const ROTATE_MS = 14_000;
 export const NEWS_MS = 8_000;
@@ -31,6 +32,7 @@ function isAdvisory(kind: NewsKind): kind is AdvisoryKind {
     kind === "starve" ||
     kind === "wither" ||
     kind === "dry" ||
+    kind === "shade" ||
     kind === "health" ||
     kind === "shortage"
   );
@@ -44,31 +46,31 @@ const newsItems: Record<
     image: "/mosslings/lore/news/fire.png",
     alt: "A moss creature watches a line of flame moving through dry grass.",
     line: (region) =>
-      `This just in... fires are raging in ${region}. Some Mosslings may have been killed.`,
+      `Fires are raging in ${region}. Some Mosslings may have been killed.`,
   },
   tornado: {
     image: "/mosslings/lore/news/tornado.png",
     alt: "A moss creature watches a small twister cross a meadow.",
     line: (region) =>
-      `This just in... a twister is loose in ${region}. Some Mosslings may have been carried off.`,
+      `A twister is loose in ${region}. Some Mosslings may have been carried off.`,
   },
   quake: {
     image: "/mosslings/lore/news/quake.png",
     alt: "A startled moss creature sits beside a crack in the ground.",
     line: (region) =>
-      `This just in... the ground is splitting in ${region}. Some Mosslings may have been lost.`,
+      `The ground is splitting in ${region}. Some Mosslings may have been lost.`,
   },
   lightning: {
     image: "/mosslings/lore/news/lightning.png",
     alt: "A moss creature watches lightning strike a distant hill.",
     line: (region) =>
-      `This just in... the sky is striking in ${region}. Some Mosslings may have been hit.`,
+      `The sky is striking in ${region}. Some Mosslings may have been hit.`,
   },
   meteor: {
     image: "/mosslings/lore/news/meteor.png",
     alt: "A moss creature looks up at a glowing stone falling from the sky.",
     line: (region) =>
-      `This just in... something fell from the sky in ${region}. Some Mosslings may have been flattened.`,
+      `Something fell from the sky in ${region}. Some Mosslings may have been flattened.`,
   },
 };
 
@@ -79,29 +81,42 @@ const advisoryItems: Record<
   starve: {
     image: "/mosslings/lore/news/hunger.png",
     alt: "A worried moss creature looks across an empty garden.",
-    line: "This just in... Mosslings are starving. Bring rain to the fields and use Grow to plant more crops.",
+    line: "Mosslings are starving. Bring rain to the fields and use Crops to plant more.",
   },
   wither: {
     image: "/mosslings/lore/news/crops.png",
     alt: "A worried moss creature sits beside rows of withered crops.",
-    line: "This just in... crops are dying. Mossling lives are in danger if God doesn't bring rain!",
+    line: "Crops are dying. Mossling lives are in danger if God doesn't bring rain!",
   },
   dry: {
     image: "/mosslings/lore/news/crops.png",
     alt: "A worried moss creature sits beside rows of drying crops.",
-    line: "This just in... the crops are drying out. Bring rain before they wither.",
+    line: "The crops are drying out. Bring rain before they wither.",
+  },
+  shade: {
+    image: "/mosslings/lore/news/crops.png",
+    alt: "A moss creature sits beside a field waiting in the shade.",
+    line: "The fields are in shadow. Crops need sun as well as rain.",
   },
   health: {
     image: "/mosslings/lore/news/health.png",
     alt: "A tired moss creature droops in the grass.",
-    line: "This just in... Mossling health keeps falling. They need more ripe crops. Use Grow, and bring rain if the fields are dry.",
+    line: "Mossling health keeps falling. They need more ripe crops. Use Crops, and bring rain if the fields are dry.",
   },
   shortage: {
     image: "/mosslings/lore/news/hunger.png",
     alt: "A worried moss creature looks across a bare garden.",
-    line: "This just in... there are not enough crops. One ripe field feeds about one Mossling. Use Grow to plant more.",
+    line: "There are not enough crops. One ripe field feeds about one Mossling. Use Crops to plant more.",
   },
 };
+
+function NewsMark() {
+  return (
+    <span className="lore-news-mark" aria-hidden="true">
+      <PixelIcon name="bulletin" />
+    </span>
+  );
+}
 
 function bulletin(news: NewsFlash) {
   if (isAdvisory(news.kind)) {
@@ -166,14 +181,19 @@ const notes = [
     alt: "A startled moss creature hurries down a path while another waits calmly on a stone.",
   },
   {
+    text: "The black death spreads by nearness. Social Mosslings drift toward the sick. The courageous may step closer out of curiosity. Only the cowardly turn away.",
+    image: "/mosslings/lore/plague.png",
+    alt: "One moss creature dims with the black death while another steps toward it and a third hurries away.",
+  },
+  {
     text: "What the child inherits is a blend of both parents: courage, curiosity, the colors in their moss.",
     image: "/mosslings/lore/blend.png",
     alt: "A small moss child whose colors mix gold and rose stands before two larger parents.",
   },
   {
-    text: "There are no maids or lads among them. Any Mossling may love any other.",
-    image: "/mosslings/lore/kindred.png",
-    alt: "Two moss creatures of different colors keep company beneath a flowering branch.",
+    text: "The fields need rain, but soaked ground has its limit. Too much rain in one place turns the land to lasting water.",
+    image: "/mosslings/lore/flood.png",
+    alt: "A moss creature watches rain pool over a crop field until the ground becomes water.",
   },
   {
     text: "They are peaceful, resilient, and not especially bright. That is part of the charm.",
@@ -249,7 +269,10 @@ export function LoreBoard({ flash }: { flash: NewsFlash | null }) {
       }}
     >
       <header className="lore-heading">
-        <h2>{news ? "This just in" : "About the Mosslings"}</h2>
+        <h2>
+          {news ? <NewsMark /> : null}
+          {news ? "This just in" : "About the Mosslings"}
+        </h2>
         {news ? null : (
           <span>
             {index + 1} of {notes.length}
@@ -263,7 +286,7 @@ export function LoreBoard({ flash }: { flash: NewsFlash | null }) {
         aria-haspopup="dialog"
         onClick={() => setOpen(true)}
       >
-        <Image src={note.image} alt={note.alt} width={84} height={84} />
+        <Image src={note.image} alt={note.alt} width={42} height={42} />
         <p>{note.text}</p>
       </button>
       <button
@@ -279,6 +302,7 @@ export function LoreBoard({ flash }: { flash: NewsFlash | null }) {
             <LoreDialog
               note={note}
               title={news ? "This just in" : "About the Mosslings"}
+              alert={news !== null}
               canAdvance={news === null}
               onNext={advance}
               onClose={() => setOpen(false)}
@@ -293,12 +317,14 @@ export function LoreBoard({ flash }: { flash: NewsFlash | null }) {
 function LoreDialog({
   note,
   title,
+  alert,
   canAdvance,
   onNext,
   onClose,
 }: {
   note: { text: string; image: string; alt: string };
   title: string;
+  alert: boolean;
   canAdvance: boolean;
   onNext: () => void;
   onClose: () => void;
@@ -338,7 +364,10 @@ function LoreDialog({
       />
       <p>{note.text}</p>
       <footer className="lore-modal-footer">
-        <p id="lore-modal-title">{title}</p>
+        <p id="lore-modal-title">
+          {alert ? <NewsMark /> : null}
+          {title}
+        </p>
         <button
           type="button"
           className="lore-next"

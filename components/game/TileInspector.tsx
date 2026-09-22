@@ -1,11 +1,20 @@
 "use client";
 
 import { type RefObject, useLayoutEffect, useRef } from "react";
-import type { MapCell } from "@/lib/map";
-import { type PreviewMossling, terrainColor } from "@/lib/map-preview";
+import { foliageAt } from "@/lib/game-time";
+import type { MapCell, MapData } from "@/lib/map";
+import {
+  iceCover,
+  type PreviewMossling,
+  snowBlanket,
+  snowDepth,
+} from "@/lib/map-preview";
 import { previewTraits } from "@/lib/mossling-traits";
+import { speciesKey } from "@/lib/species";
+import { speciesName } from "@/lib/species-name";
 
 import { MosslingPortrait } from "./MosslingPortrait";
+import { TilePortrait } from "./TilePortrait";
 
 const terrainInfo = {
   grass: {
@@ -26,30 +35,30 @@ const terrainInfo = {
   water: {
     title: "Water",
     description:
-      "Water gathers in this low patch of ground. A cool, wet interruption in the landscape, separating the dry land around it.",
+      "Water gathers in this low patch of ground. A cool, wet interruption in the landscape, separating the dry land around it. Late autumn skins it with ice, and the ice melts through spring.",
   },
 };
 const cropInfo = {
   title: "Crops",
   description:
-    "A sown patch. It starts as green growth and, over six rainy months, draws itself into rows. Without rain the crop withers, and hungry Mosslings weaken.",
+    "A sown patch. It starts as plain green. Orange dots appear as it grows, and a ripe field stands in rows. Without rain the crop withers. Without sun it simply waits.",
 };
 export function TileInspector({
   seed,
-  index,
   x,
   y,
   cell,
+  map,
   mossling,
   hostRef,
   onClose,
   elapsed,
 }: {
   seed: number;
-  index: number;
   x: number;
   y: number;
   cell: MapCell;
+  map?: MapData | null;
   mossling?: PreviewMossling;
   hostRef: RefObject<HTMLDivElement | null>;
   onClose: () => void;
@@ -62,7 +71,7 @@ export function TileInspector({
     ? {
         title: "Tree",
         description:
-          "A small mossy tree takes root here, offering a patch of shade. Fire and storms can damage it.",
+          "A small mossy tree takes root here, offering a patch of shade. A well-watered forest spreads into nearby grass and dirt. Fire and storms can damage it.",
       }
     : crop
       ? cropInfo
@@ -70,7 +79,11 @@ export function TileInspector({
   const traits = mossling
     ? (mossling.traits ?? previewTraits(seed, mossling.id))
     : [];
-  const title = mossling ? `Mossling #${mossling.id + 1}` : info.title;
+  const title = mossling ? speciesName(speciesKey(mossling)) : info.title;
+  const look = foliageAt(elapsed?.() ?? 0);
+  const snow = map ? snowDepth(map, y * map.width + x, look.snow) : 0;
+  const ice = map ? iceCover(y * map.width + x, look.ice) : look.ice;
+  const buried = map ? snowBlanket(map, y * map.width + x, look) : false;
   useLayoutEffect(() => {
     const dialog = dialogRef.current;
     const host = hostRef.current;
@@ -109,6 +122,9 @@ export function TileInspector({
             {mossling ? "Meet a Mossling" : "A little patch of world"}
           </p>
           <h2 id="tile-inspector-title">{title}</h2>
+          {mossling && (
+            <p className="inspector-identity">Mossling #{mossling.id + 1}</p>
+          )}
         </div>
         <button
           ref={closeRef}
@@ -214,10 +230,12 @@ export function TileInspector({
         ) : (
           <>
             <div className="terrain-introduction">
-              <span
-                className="terrain-sample"
-                style={{ background: terrainColor(cell, index) }}
-                aria-hidden="true"
+              <TilePortrait
+                cell={cell}
+                look={look}
+                snow={snow}
+                ice={ice}
+                buried={buried}
               />
               <p>{info.description}</p>
             </div>
@@ -227,6 +245,7 @@ export function TileInspector({
                 [
                   ["Elevation", cell.elevation],
                   ["Moisture", cell.moisture],
+                  ...(crop ? [["Light", cell.light ?? 0] as const] : []),
                   ["Rockiness", cell.rockiness],
                   ["Fertility", cell.fertility],
                 ] as const

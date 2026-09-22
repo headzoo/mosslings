@@ -13,7 +13,7 @@ import type { PreviewMossling } from "../lib/map-preview";
 import type { WorldResources } from "../lib/world-resources";
 
 function world(patch: {
-  crops?: { growth: number; moisture: number }[];
+  crops?: { growth: number; moisture: number; light?: number }[];
   mosslings?: PreviewMossling[];
   resources?: Partial<WorldResources>;
   events?: { id: number; message: string }[];
@@ -30,6 +30,7 @@ function world(patch: {
       terrain: "grass" as const,
       elevation: 0.6,
       moisture: crop.moisture,
+      light: crop.light,
       rockiness: 0.2,
       fertility: 0.5,
       growth: crop.growth,
@@ -44,7 +45,7 @@ function world(patch: {
       mosslings: living.length,
       killed: 0,
       food: crops.filter((crop) => crop.growth >= 1).length,
-      wood: 0,
+      trees: 0,
       stone: 0,
       water: 0,
       health: living.length
@@ -131,6 +132,37 @@ test("a field that is at least half below growing moisture asks for rain", () =>
     }),
   );
   assert.equal(damp.kind, null);
+});
+
+test("a moist dark field asks for sun, and a dry field still asks for rain first", () => {
+  const shaded = show(
+    world({
+      crops: [
+        { growth: 0.5, moisture: 1, light: 0 },
+        { growth: 0.2, moisture: 1 },
+      ],
+    }),
+  );
+  assert.equal(shaded.kind, "shade");
+  const lit = show(
+    world({
+      mosslings: [],
+      crops: [
+        { growth: 0.5, moisture: 1, light: 1 },
+        { growth: 0.2, moisture: 1, light: 1 },
+      ],
+    }),
+  );
+  assert.equal(lit.kind, null);
+  const dry = show(
+    world({
+      crops: [
+        { growth: 0.5, moisture: 0.1 },
+        { growth: 0.2, moisture: 1 },
+      ],
+    }),
+  );
+  assert.equal(dry.kind, "dry");
 });
 
 test("falling health warns only while Mosslings are hungry", () => {

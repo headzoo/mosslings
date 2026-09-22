@@ -45,6 +45,12 @@ export interface MapCell {
   /** 0..1. Lower values are drier. */
   moisture: number;
 
+  /**
+   * 0..1. Sunlight on this tile. Missing means dark.
+   * Crops ripen only while this and moisture are both high enough.
+   */
+  light?: number;
+
   /** 0..1. Higher values are more likely to become exposed rock. */
   rockiness: number;
 

@@ -1,10 +1,10 @@
+import type { Season } from "../game-time";
 import type { MapCell, MapData } from "../map";
 import type { PreviewMossling } from "../map-preview";
 
 export type PowerId =
   | "rain"
-  | "grow"
-  | "ground"
+  | "sun"
   | "raze"
   | "disease"
   | "fire"
@@ -60,6 +60,8 @@ export interface GodContext {
 export interface EffectPainter {
   width: number;
   height: number;
+  /** Winter clouds drop snow. Other seasons drop rain. */
+  season?: Season;
   cell(
     x: number,
     y: number,
@@ -82,5 +84,5 @@ export interface WorldEvent {
   id: number;
   message: string;
   year: number;
-  season: import("../game-time").Season;
+  season: Season;
 }

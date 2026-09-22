@@ -44,19 +44,20 @@ button:hover {
   box-shadow: inset 0 0 0 1px #18282c;
 }
 .game-screen {
+  --game-gap: 12px;
   height: 100dvh;
   min-height: 360px;
   padding: 10px 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--game-gap);
   overflow: hidden;
 }
 .game-header {
   display: grid;
   grid-template-columns: 306px minmax(0, 1fr) 180px 344px;
   gap: 12px;
-  align-items: center;
+  align-items: end;
   flex-shrink: 0;
 }
 .brand {
@@ -110,7 +111,7 @@ button:hover {
 .health-food {
   --swatch: #299c30;
 }
-.health-wood {
+.health-trees {
   --swatch: #946d45;
 }
 .health-stone {
@@ -205,7 +206,7 @@ button:hover {
   min-height: 0;
   display: grid;
   grid-template-columns: 88px minmax(0, 1fr) 218px;
-  gap: 12px;
+  gap: var(--game-gap);
 }
 .god-rail {
   display: flex;
@@ -215,7 +216,7 @@ button:hover {
 }
 .god-buttons {
   display: grid;
-  grid-template-rows: repeat(10, minmax(0, 1fr));
+  grid-template-rows: repeat(9, minmax(0, 1fr));
   gap: 5px;
   min-height: 0;
   flex: 1;
@@ -259,7 +260,7 @@ button:hover {
 .lore-board {
   position: relative;
   flex-shrink: 0;
-  height: 156px;
+  height: 114px;
   margin: 0 3px 3px;
   padding: 8px 12px 10px;
   display: flex;
@@ -284,9 +285,30 @@ button:hover {
   gap: 12px;
 }
 .lore-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin: 0;
   font-size: 15px;
   letter-spacing: 0.4px;
+}
+.lore-news-mark {
+  display: inline-flex;
+  animation: lore-news-flash 0.9s steps(2, end) infinite;
+}
+.lore-news-mark .pixel-icon {
+  width: 16px;
+  height: 16px;
+}
+@keyframes lore-news-flash {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0.2;
+  }
 }
 .lore-board[data-news] .lore-heading h2 {
   color: #8a3a24;
@@ -344,8 +366,8 @@ button:hover {
   z-index: 1;
 }
 .lore-note img {
-  width: 84px;
-  height: 84px;
+  width: 42px;
+  height: 42px;
   object-fit: cover;
   flex-shrink: 0;
   border: 2px solid #c4a56a;
@@ -366,7 +388,8 @@ button:hover {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .lore-note {
+  .lore-note,
+  .lore-news-mark {
     animation: none;
   }
 }
@@ -436,6 +459,9 @@ button:hover {
   border-top: 1px solid #c4a56a;
 }
 .lore-modal-footer p {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin: 0;
   color: #7a6240;
   font-size: 13px;
@@ -459,54 +485,87 @@ button:hover {
   flex-direction: column;
   gap: 10px;
 }
-.event-log {
+.species-list {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
-.event-log h2 {
+.species-list h2 {
   margin: 0;
   padding: 9px 13px 7px;
   border-bottom: 2px solid var(--border);
   font-size: 18px;
   font-weight: 700;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
 }
-.event-log h2 span {
-  font-size: 10px;
-  font-weight: 400;
-  color: #92a2a5;
-}
-.event-log ol {
+.species-list ol {
   margin: 0;
-  padding: 10px 14px;
+  padding: 8px;
   list-style: none;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: #34464a transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
-.event-log li {
-  margin-bottom: 14px;
+.species-list button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
 }
-.event-log li:last-child {
-  margin-bottom: 0;
+.species-list button[aria-pressed="true"],
+.species-list button[aria-pressed="true"]:hover {
+  border-color: #e5da57;
+  background: #27351f;
 }
-.event-log h3 {
-  margin: 0 0 2px;
-  font-size: 15px;
+.species-swatch {
+  display: block;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 50%;
+  image-rendering: pixelated;
+  background: #102018;
+}
+.species-list button span {
+  font-size: 16px;
+}
+.species-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--foreground);
+}
+.species-count {
+  flex: none;
   color: #55d7f4;
-  line-height: 1.35;
 }
-.event-log p {
+.species-empty {
   margin: 0;
-  line-height: 1.4;
+  padding: 10px 14px;
+  color: #92a2a5;
   font-size: 14px;
 }
-.event-log .recent-event h3 {
-  color: #ffe128;
+.species-highlights {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+}
+.species-highlight {
+  position: absolute;
+  box-shadow:
+    inset 0 0 0 1px #ffe128,
+    0 0 0 1px #1a1400;
 }
 .minimap {
   padding: 13px;
@@ -558,6 +617,9 @@ button:hover {
   }
 }
 @media (max-width: 1300px) {
+  .game-screen {
+    --game-gap: 9px;
+  }
   .game-header {
     grid-template-columns: 234px minmax(0, 1fr) 150px 252px;
     gap: 8px;
@@ -597,7 +659,6 @@ button:hover {
   }
   .game-body {
     grid-template-columns: 76px minmax(0, 1fr) 190px;
-    gap: 9px;
   }
   .god-button {
     font-size: 13px;
@@ -605,12 +666,12 @@ button:hover {
 }
 @media (max-height: 780px) {
   .lore-board {
-    height: 124px;
+    height: 96px;
     padding-block: 6px;
   }
   .lore-note img {
-    width: 56px;
-    height: 56px;
+    width: 28px;
+    height: 28px;
   }
   .lore-note p {
     font-size: 13px;
@@ -624,9 +685,6 @@ button:hover {
   }
   .minimap-image {
     aspect-ratio: 1.65;
-  }
-  .event-log li {
-    margin-bottom: 12px;
   }
 }
 @media (max-width: 1100px) {
@@ -675,15 +733,16 @@ button:hover {
   .game-body {
     grid-template-columns: 68px minmax(0, 1fr) 170px;
   }
-  .event-log h2 {
+  .species-list h2 {
     padding-inline: 9px;
     font-size: 16px;
   }
-  .event-log ol {
-    padding-inline: 9px;
+  .species-list ol {
+    padding-inline: 6px;
   }
-  .event-log p {
-    font-size: 12px;
+  .species-swatch {
+    width: 24px;
+    height: 24px;
   }
   .god-button {
     font-size: 12px;
@@ -695,7 +754,7 @@ button:hover {
 @media (max-width: 620px) {
   .game-screen {
     padding: 8px;
-    gap: 8px;
+    --game-gap: 7px;
   }
   .game-header {
     grid-template-columns: minmax(0, 1fr) 120px;
@@ -752,7 +811,6 @@ button:hover {
   .game-body {
     grid-template-columns: 56px minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) 94px;
-    gap: 7px;
   }
   .god-rail {
     grid-row: 1 / 3;
@@ -771,17 +829,24 @@ button:hover {
     grid-template-columns: minmax(0, 1fr) 78px;
     gap: 6px;
   }
-  .event-log h2 {
+  .species-list h2 {
     padding: 3px 7px;
     font-size: 12px;
   }
-  .event-log ol {
-    padding: 5px 7px;
+  .species-list ol {
+    padding: 3px 4px;
+    gap: 2px;
   }
-  .event-log h3 {
-    font-size: 11px;
+  .species-list button {
+    gap: 6px;
+    padding: 2px 4px;
   }
-  .event-log p {
+  .species-swatch {
+    width: 16px;
+    height: 16px;
+  }
+  .species-list button span,
+  .species-empty {
     font-size: 11px;
   }
   .minimap {
@@ -835,9 +900,6 @@ button:hover {
 .camera-surface:hover {
   background: transparent;
 }
-.camera-surface[data-dragging="true"] {
-  cursor: grabbing;
-}
 .camera-surface:focus-visible {
   outline-offset: -3px;
 }
@@ -847,6 +909,14 @@ button:hover {
 .minimap-world {
   position: relative;
   width: 100%;
+  cursor: pointer;
+  touch-action: none;
+}
+.minimap-world[data-over-box="true"] {
+  cursor: grab;
+}
+.minimap-world[data-dragging="true"] {
+  cursor: grabbing;
 }
 .minimap-viewport {
   position: absolute;
@@ -947,6 +1017,11 @@ button:hover {
   font-size: 20px;
   margin: 0;
 }
+.inspector-identity {
+  margin: 4px 0 0;
+  color: #9dab9f;
+  font-size: 12px;
+}
 .inspector-header button {
   border: 1px solid var(--border);
   font-size: 24px;
@@ -984,11 +1059,13 @@ button:hover {
   font-size: 12px;
   line-height: 1.65;
 }
-.terrain-sample {
-  width: 48px;
-  height: 48px;
+.terrain-portrait {
+  width: 96px;
+  height: 96px;
   flex: none;
-  border: 3px solid #ffffff12;
+  border: 6px solid #172c26;
+  background: #102416;
+  image-rendering: pixelated;
 }
 .inspector-content h3 {
   font-size: 14px;
@@ -1076,7 +1153,8 @@ button:hover {
   .inspector-content {
     padding: 0 12px 12px;
   }
-  .mossling-introduction {
+  .mossling-introduction,
+  .terrain-introduction {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -1098,9 +1176,6 @@ button:hover {
 }
 .camera-surface[data-targeting="true"] {
   cursor: crosshair;
-}
-.camera-surface[data-dragging="true"] {
-  cursor: grabbing;
 }
 .god-effects {
   position: absolute;

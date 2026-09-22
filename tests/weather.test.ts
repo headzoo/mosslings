@@ -2,14 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { MONTH_SECONDS, YEAR_SECONDS } from "../lib/game-time";
 import { GodWorld } from "../lib/god/engine";
-import type { MapData } from "../lib/map";
-import type { PreviewMossling } from "../lib/map-preview";
+import type { GodEffect } from "../lib/god/types";
 import {
   floodRadius,
+  lightningUnderRain,
   rollMonth,
+  WILD_DISASTER,
   WILD_RAIN,
   WILD_STORM,
 } from "../lib/god/weather";
+import type { MapData } from "../lib/map";
+import type { PreviewMossling } from "../lib/map-preview";
 
 function fixture(width = 16, height = 16, seed = 42): MapData {
   return {
@@ -53,7 +56,7 @@ function scripted(values: number[]) {
   return () => values[index++] ?? 0;
 }
 
-test("natural rain prefers crops and disasters stay much rarer", () => {
+test("natural rain falls more often and disasters stay much rarer", () => {
   const map = fixture(10, 10, 1);
   map.cells[0].growth = 0.5;
   const random = rng(7);
@@ -73,12 +76,43 @@ test("natural rain prefers crops and disasters stay much rarer", () => {
       } else if (spawn.kind !== "rain") disasters++;
     }
   }
-  assert.ok(rains > 800);
-  assert.ok(onCrop / rains > 0.65);
+  assert.ok(rains > 2200);
+  assert.ok(onCrop / rains > 0.25);
+  assert.ok(onCrop / rains < 0.5);
   assert.ok(disasters > 0);
   assert.ok(storms > 0);
   assert.ok(rains > disasters * 8);
   assert.ok(disasters > storms);
+});
+test("showers land on trees and grass as well as crops", () => {
+  const map = fixture(6, 6, 2);
+  for (const cell of map.cells) cell.terrain = "rock";
+  map.cells[0].terrain = "grass";
+  map.cells[0].growth = 0.2;
+  map.cells[1].terrain = "dirt";
+  map.cells[1].tree = { health: 100 };
+  map.cells[2].terrain = "grass";
+  const random = rng(11);
+  let rains = 0;
+  let onCrop = 0;
+  let onTree = 0;
+  let onGrass = 0;
+  let pending: { x: number; y: number } | null = null;
+  for (let month = 0; month < 3000; month++) {
+    const roll = rollMonth(map, random, 16, pending, () => true);
+    pending = roll.pendingStorm;
+    for (const spawn of roll.spawns) {
+      if (spawn.message !== WILD_RAIN) continue;
+      rains++;
+      if (spawn.x === 0 && spawn.y === 0) onCrop++;
+      else if (spawn.x === 1 && spawn.y === 0) onTree++;
+      else if (spawn.x === 2 && spawn.y === 0) onGrass++;
+    }
+  }
+  assert.ok(rains > 1500);
+  assert.ok(onCrop / rains > 0.2 && onCrop / rains < 0.5);
+  assert.ok(onTree / rains > 0.2);
+  assert.ok(onGrass / rains > 0.2);
 });
 
 test("a full effect list holds a storm until a cloud can be shown", () => {
@@ -204,4 +238,62 @@ test("a natural shower does not refill a dry crop", () => {
     saw = true;
   }
   assert.ok(saw);
+});
+
+function cloud(x: number, y: number, radius = 5): GodEffect {
+  return {
+    id: 1,
+    kind: "rain",
+    x,
+    y,
+    origin: { x, y },
+    age: 0,
+    duration: 6,
+    radius,
+    intensity: 1,
+    seed: 1,
+    step: 1,
+    marks: new Map(),
+    hit: new Set(),
+    impacted: false,
+  };
+}
+
+test("lightning strikes under rain about one tenth of the time", () => {
+  const map = fixture(20, 20);
+  const rain = cloud(10, 10);
+  const quiet = lightningUnderRain(map, [rain], 0.05, () => 0.5, 16);
+  assert.equal(quiet.length, 0);
+  const forced = lightningUnderRain(map, [rain], 0.05, () => 0, 16);
+  assert.equal(forced.length, 1);
+  assert.equal(forced[0]?.kind, "lightning");
+  assert.equal(forced[0]?.message, WILD_DISASTER.lightning);
+  const bolt = forced[0];
+  assert.ok(bolt);
+  assert.ok(Math.hypot(bolt.x - 10, bolt.y - 10) <= 5);
+
+  const random = rng(11);
+  let strikes = 0;
+  const seconds = 2000;
+  const step = 0.05;
+  for (let t = 0; t < seconds; t += step) {
+    strikes += lightningUnderRain(map, [rain], step, random, 16).length;
+  }
+  const rate = strikes / seconds;
+  assert.ok(rate > 0.07 && rate < 0.13);
+
+  const world = new GodWorld(fixture(16, 16, 5), []);
+  const seen = new Set<number>();
+  for (let shower = 0; shower < 25; shower++) {
+    world.cast("rain", 8, 8);
+    for (let i = 0; i < 120; i++) {
+      world.tick(0.05);
+      for (const effect of world.effects) {
+        if (effect.kind !== "lightning" || seen.has(effect.id)) continue;
+        seen.add(effect.id);
+        assert.ok(Math.hypot(effect.x - 8, effect.y - 8) <= 5);
+      }
+    }
+  }
+  assert.ok(seen.size >= 5 && seen.size <= 30);
 });

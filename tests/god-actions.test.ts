@@ -73,69 +73,95 @@ test("rain changes a bounded area and extinguishes a live fire without damaging 
   advance(world, 1);
   assert.equal(world.mosslings[0]?.health ?? 0, health);
 });
-test("grow restores burned dirt only in its local area", () => {
+test("sun lights its disk, cures the living, and leaves the dead", () => {
+  const map = fixture(30, 30);
+  const hurt = mossling(15 * 30 + 15);
+  hurt.health = 40;
+  hurt.plagueMonths = 2;
+  const nearly = mossling(15 * 30 + 16, 1);
+  nearly.health = 90;
+  nearly.plagueMonths = 1;
+  const dead = mossling(15 * 30 + 17, 2);
+  dead.health = 0;
+  dead.plagueMonths = 4;
+  const far = mossling(0, 3);
+  far.health = 40;
+  far.plagueMonths = 1;
+  const world = new GodWorld(map, [hurt, nearly, dead, far]);
+  assert.equal(world.cast("sun", 15, 15), null);
+  const at = (id: number) => world.mosslings.find((m) => m.id === id);
+  assert.equal(at(0)?.health, 70);
+  assert.equal(at(0)?.plagueMonths, undefined);
+  assert.equal(at(1)?.health, 100);
+  assert.equal(at(1)?.plagueMonths, undefined);
+  assert.equal(at(2)?.health, 0);
+  assert.equal(at(2)?.plagueMonths, 4);
+  assert.equal(at(3)?.health, 40);
+  assert.equal(at(3)?.plagueMonths, 1);
+  advance(world, 4);
+  assert.equal(world.map.cells[15 * 30 + 15].light, 1);
+  assert.ok((world.map.cells[15 * 30 + 20].light ?? 0) > 0.9);
+  assert.equal(world.map.cells[15 * 30 + 21].light, undefined);
+  assert.equal(world.map.cells[0].light, undefined);
+  assert.equal(at(0)?.health, 70);
+});
+test("crops restores burned dirt only in its local area", () => {
   const map = fixture(30, 30);
   map.cells[465].terrain = "dirt";
   map.cells[465].damage = "burned";
   const world = new GodWorld(map, []);
-  world.cast("grow", 15, 15);
-  advance(world, 4);
+  world.cast("raze", 15, 15);
   assert.equal(world.map.cells[465].terrain, "grass");
   assert.equal(world.map.cells[465].damage, undefined);
-  assert.ok(world.map.cells[465].fertility > 0.4);
-  assert.equal(world.map.cells[0].fertility, 0.4);
+  assert.equal(world.map.cells[465].growth, 0);
+  assert.equal(world.map.cells[0].growth, undefined);
 });
-test("grow fills up to eight connected ground tiles without crossing forest, water, or stone", () => {
+test("crops fills up to eight connected grass tiles without crossing forest, water, or stone", () => {
+  const map = fixture(5, 5);
+  map.cells[11].tree = { health: 100 };
+  map.cells[13].terrain = "water";
+  map.cells[17].terrain = "rock";
+  const world = new GodWorld(map, []);
+  assert.match(world.cast("raze", 3, 2) ?? "", /water/);
+  assert.match(world.cast("raze", 2, 3) ?? "", /stone/);
+  assert.equal(world.cast("raze", 2, 2), null);
+  assert.equal(world.map.cells.filter((cell) => cell.growth === 0).length, 8);
+  assert.ok(world.map.cells[11].tree);
+  assert.equal(world.map.cells[13].terrain, "water");
+  assert.equal(world.map.cells[17].terrain, "rock");
+});
+test("crops turns a connected stand of trees into crop land", () => {
+  const map = fixture(5, 5);
+  for (let index = 0; index < 10; index++)
+    map.cells[index].tree = { health: 100 };
+  map.cells[24].tree = { health: 100 };
+  const world = new GodWorld(map, []);
+  assert.equal(world.cast("raze", 0, 0), null);
+  assert.equal(world.map.cells.filter((cell) => cell.tree).length, 1);
+  assert.equal(world.map.cells[24].tree?.health, 100);
+  assert.equal(world.map.cells.filter((cell) => cell.growth === 0).length, 10);
+  assert.equal(world.map.cells[0].terrain, "grass");
+  assert.equal(world.map.cells[0].tree, undefined);
+  world.advanceTo(112);
+  assert.equal(world.map.cells[0].tree, undefined);
+});
+test("crops turns up to eight connected dirt tiles into crop land", () => {
   const map = fixture(5, 5);
   for (const cell of map.cells) cell.terrain = "dirt";
   map.cells[11].tree = { health: 100 };
   map.cells[13].terrain = "water";
   map.cells[17].terrain = "rock";
+  map.cells[12].growth = 0.5;
   const world = new GodWorld(map, []);
-  assert.match(world.cast("grow", 1, 2) ?? "", /forest/);
-  assert.match(world.cast("grow", 3, 2) ?? "", /water/);
-  assert.match(world.cast("grow", 2, 3) ?? "", /stone/);
-  assert.equal(world.cast("grow", 2, 2), null);
-  assert.equal(
-    world.map.cells.filter((cell) => cell.terrain === "grass").length,
-    8,
-  );
+  assert.match(world.cast("raze", 3, 2) ?? "", /water/);
+  assert.match(world.cast("raze", 2, 3) ?? "", /stone/);
+  assert.equal(world.cast("raze", 2, 2), null);
+  assert.equal(world.map.cells[12].growth, 0.5);
+  assert.equal(world.map.cells[12].terrain, "grass");
+  assert.equal(world.map.cells.filter((cell) => cell.growth === 0).length, 7);
   assert.ok(world.map.cells[11].tree);
   assert.equal(world.map.cells[13].terrain, "water");
   assert.equal(world.map.cells[17].terrain, "rock");
-});
-test("ground changes a compact eight-tile patch to dirt", () => {
-  const map = fixture(5, 5);
-  for (const cell of map.cells) cell.terrain = "water";
-  const world = new GodWorld(map, []);
-  world.cast("ground", 2, 2);
-  const ground = world.map.cells.flatMap((cell, index) =>
-    cell.terrain === "dirt" ? [index] : [],
-  );
-  assert.equal(ground.length, 8);
-  assert.ok(ground.includes(12));
-  assert.ok(
-    ground.every(
-      (index) =>
-        [1, 2, 3].includes(index % 5) &&
-        [1, 2, 3].includes(Math.floor(index / 5)),
-    ),
-  );
-  assert.equal(world.map.cells[12].moisture, 0.2);
-  assert.equal(world.map.cells[12].fertility, 0.4);
-});
-test("raze clears up to eight connected forest tiles to dirt", () => {
-  const map = fixture(5, 5);
-  for (let index = 0; index < 10; index++)
-    map.cells[index].tree = { health: 100 };
-  const world = new GodWorld(map, []);
-  assert.match(world.cast("raze", 0, 2) ?? "", /forest/);
-  assert.equal(world.cast("raze", 0, 0), null);
-  assert.equal(world.map.cells.filter((cell) => cell.tree).length, 2);
-  assert.equal(
-    world.map.cells.filter((cell) => cell.terrain === "dirt").length,
-    8,
-  );
 });
 test("lightning applies real health and tree damage once, leaving a scorch", () => {
   const map = fixture(30, 30);
@@ -155,6 +181,7 @@ test("lightning applies real health and tree damage once, leaving a scorch", () 
 });
 test("fire spreads locally, respects water, expires and clears all burning flags", () => {
   const map = fixture(30, 30);
+  for (const cell of map.cells) cell.moisture = 0.5;
   map.cells[466].terrain = "water";
   const world = new GodWorld(map, [mossling(465)]);
   world.cast("fire", 15, 15);
@@ -172,6 +199,27 @@ test("fire spreads locally, respects water, expires and clears all burning flags
   );
   assert.equal(world.effects.length, 0);
   assert.ok((world.mosslings[0]?.health ?? 0) < 100);
+});
+test("brown grass and moss carry fire farther than wet ground", () => {
+  const map = fixture(30, 30);
+  for (const cell of map.cells) cell.moisture = 0;
+  map.cells[466].terrain = "water";
+  const world = new GodWorld(map, []);
+  world.cast("fire", 15, 15);
+  advance(world, 12);
+  const burned = world.map.cells.flatMap((c, i) =>
+    c.damage === "burned" ? [i] : [],
+  );
+  assert.ok(
+    burned.some((i) => Math.hypot((i % 30) - 15, Math.floor(i / 30) - 15) > 6),
+  );
+  for (const i of burned)
+    assert.ok(Math.hypot((i % 30) - 15, Math.floor(i / 30) - 15) <= 10);
+  assert.equal(world.map.cells[466].terrain, "water");
+  assert.equal(
+    world.map.cells.some((c) => c.burning),
+    false,
+  );
 });
 test("tornado wanders, damages occupants, moves them without overlaps, and expires", () => {
   const world = new GodWorld(fixture(30, 30), [
@@ -269,4 +317,72 @@ test("effects are deterministic, rendering is read-only, and concurrency is capp
   for (let i = 0; i < 20; i++) a.cast("rain", 10, 10);
   assert.equal(a.effects.length, 16);
   assert.ok(a.cast("meteor", 10, 10));
+});
+test("a quiet plow stroke skips the log and recycles a finished flash", () => {
+  const world = new GodWorld(fixture(20, 20), []);
+  for (let i = 0; i < 16; i++) assert.equal(world.cast("raze", 0, 0), null);
+  assert.equal(world.effects.length, 16);
+  const before = world.events.length;
+  assert.equal(world.map.cells[19 * 20 + 19].growth, undefined);
+  assert.equal(world.cast("raze", 19, 19, { quiet: true }), null);
+  assert.equal(world.effects.length, 16);
+  assert.equal(world.events.length, before);
+  assert.equal(world.map.cells[19 * 20 + 19].growth, 0);
+});
+test("a quiet rejection is not written to the event log", () => {
+  const map = fixture(4, 4);
+  map.cells[0].terrain = "water";
+  const world = new GodWorld(map, []);
+  const before = world.events.length;
+  assert.equal(
+    world.cast("raze", 0, 0, { quiet: true }),
+    "Crops needs ground or forest, not water.",
+  );
+  assert.equal(world.events.length, before);
+});
+test("winter clouds drop snow and warmer clouds drop rain", () => {
+  const winter = new GodWorld(fixture(12, 12), []);
+  winter.advanceTo(28);
+  assert.equal(winter.cast("rain", 4, 4), null);
+  const snow = new Set<string>();
+  winter.draw({
+    width: 12,
+    height: 12,
+    cell(_x, _y, color) {
+      snow.add(color);
+    },
+  });
+  assert.ok(snow.has("#f7fbff"));
+  assert.equal(snow.has("#56b9ff"), false);
+
+  const summer = new GodWorld(fixture(12, 12), []);
+  summer.advanceTo(8);
+  assert.equal(summer.cast("rain", 4, 4), null);
+  const rain = new Set<string>();
+  summer.draw({
+    width: 12,
+    height: 12,
+    cell(_x, _y, color) {
+      rain.add(color);
+    },
+  });
+  assert.ok(rain.has("#56b9ff"));
+  assert.equal(rain.has("#f7fbff"), false);
+});
+test("rain still stops when sixteen powers are already active", () => {
+  const world = new GodWorld(fixture(20, 20), []);
+  for (let i = 0; i < 16; i++) world.cast("rain", i, 0);
+  assert.equal(
+    world.cast("rain", 0, 1, { quiet: true }),
+    "Let a few active powers finish first.",
+  );
+  assert.equal(world.effects.length, 16);
+});
+test("a quiet disease cast still records who caught it", () => {
+  const world = new GodWorld(fixture(12, 12), [mossling(0)]);
+  assert.equal(world.cast("disease", 0, 0, { quiet: true }), null);
+  assert.equal(world.events[0]?.message, "1 Mossling caught the black death.");
+  assert.ok(
+    world.events.every((event) => !event.message.startsWith("Disease at tile")),
+  );
 });

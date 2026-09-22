@@ -16,6 +16,7 @@ export const rain: GodAction = {
   },
   draw(e, p) {
     const fade = Math.min(1, e.age * 3, (e.duration - e.age) * 2);
+    const snow = p.season === "Winter";
     for (let row = 0; row < 3; row++)
       for (let x = -4; x <= 4; x++) {
         if (row === 0 && Math.abs(x) > 2) continue;
@@ -27,6 +28,15 @@ export const rain: GodAction = {
           fade,
         );
       }
+    if (snow) {
+      for (let i = 0; i < 18; i++) {
+        const x = e.x - 4 + noise(i + e.id * 51) * 8;
+        const y = e.y - 3 + ((e.age * 3.2 + noise(i + 99) * 8) % 8);
+        p.cell(x, y, i % 2 ? "#f7fbff" : "#d5e6f2", 0.45, fade);
+      }
+      ring(p, e.x, e.y + 1, (e.age * 1.2) % 5, "#e7f2f8", 0.2 * fade);
+      return;
+    }
     for (let i = 0; i < 32; i++) {
       const x = e.x - 4 + noise(i + e.id * 51) * 8;
       const y = e.y - 4 + ((e.age * 9 + noise(i + 99) * 9) % 9);

@@ -1,8 +1,14 @@
 import { advanceCrops, appetite, ripeTiles } from "../crops";
-import { type GameDate, gameDateAt, MONTH_SECONDS } from "../game-time";
+import {
+  type GameDate,
+  gameDateAt,
+  MONTH_SECONDS,
+  type Season,
+} from "../game-time";
 import type { MapData } from "../map";
 import type { PreviewMossling } from "../map-preview";
 import { previewTraits } from "../mossling-traits";
+import { advanceVegetation } from "../vegetation";
 import { countWorldResources, type WorldResources } from "../world-resources";
 import { GOD_ACTIONS } from "./actions";
 import { DisasterAvoidance } from "./avoidance";
@@ -23,7 +29,12 @@ import type {
   PowerId,
   WorldEvent,
 } from "./types";
-import { accumulateFlood, floodRadius, rollMonth } from "./weather";
+import {
+  accumulateFlood,
+  floodRadius,
+  lightningUnderRain,
+  rollMonth,
+} from "./weather";
 
 export interface WorldSnapshot {
   map: MapData;
@@ -32,11 +43,14 @@ export interface WorldSnapshot {
   resources: WorldResources;
 }
 const MAX_EFFECTS = 16;
+export const EFFECT_CAP_MESSAGE = "Let a few active powers finish first.";
 const caught = (count: number) =>
   `${count} Mossling${count === 1 ? "" : "s"} caught the black death.`;
 
 export class GodWorld {
   readonly map: MapData;
+  /** Bumped when the map changes so canvases can repaint without a new object. */
+  revision = 0;
   mosslings: PreviewMossling[];
   effects: GodEffect[] = [];
   events: WorldEvent[];
@@ -64,7 +78,7 @@ export class GodWorld {
     mosslings: PreviewMossling[],
     private readonly getDate: () => GameDate = () => ({
       year: 1,
-      season: "Spring",
+      season: "Summer",
     }),
   ) {
     const date = this.getDate();
@@ -234,22 +248,42 @@ export class GodWorld {
       ...this.events,
     ].slice(0, 30);
   }
-  cast(kind: PowerId, x: number, y: number): string | null {
-    return this.begin(kind, x, y, {});
+  cast(
+    kind: PowerId,
+    x: number,
+    y: number,
+    tune: { quiet?: boolean } = {},
+  ): string | null {
+    return this.begin(kind, x, y, tune);
+  }
+  /** Crops and lightning finish on their first step; the slot after that is only a flash. */
+  private freeFlash(kind: PowerId) {
+    if (kind !== "raze" && kind !== "lightning") return;
+    const index = this.effects.findIndex(
+      (effect) =>
+        (effect.kind === "raze" || effect.kind === "lightning") &&
+        effect.step > 0,
+    );
+    if (index >= 0) this.effects.splice(index, 1);
   }
   private begin(
     kind: PowerId,
     x: number,
     y: number,
-    tune: { duration?: number; intensity?: number; message?: string },
+    tune: {
+      duration?: number;
+      intensity?: number;
+      message?: string;
+      quiet?: boolean;
+    },
   ): string | null {
     if (!this.context.cell(x, y)) return "Choose a tile inside the map.";
-    if (this.effects.length >= MAX_EFFECTS)
-      return "Let a few active powers finish first.";
+    if (this.effects.length >= MAX_EFFECTS) this.freeFlash(kind);
+    if (this.effects.length >= MAX_EFFECTS) return EFFECT_CAP_MESSAGE;
     const action = GOD_ACTIONS[kind];
     const invalid = action.canPlace?.(this.context, { x, y });
     if (invalid) {
-      if (tune.message === undefined) this.record(invalid);
+      if (!tune.quiet && tune.message === undefined) this.record(invalid);
       return invalid;
     }
     const id = this.nextId++;
@@ -261,14 +295,13 @@ export class GodWorld {
     if (tune.duration !== undefined) e.duration = tune.duration;
     if (tune.intensity !== undefined) e.intensity = tune.intensity;
     action.update(e, this.context, 0);
-    this.ecology.syncTrees(this.elapsed);
     e.step++;
     this.effects.push(e);
     if (tune.message) this.record(tune.message);
-    else if (tune.message === undefined)
-      this.record(`${action.label} at tile ${x}, ${y}.`);
+    else if (!tune.quiet) this.record(`${action.label} at tile ${x}, ${y}.`);
     if (e.kind === "disease" && e.hit.size) this.record(caught(e.hit.size));
     this.removeDead();
+    this.revision++;
     return null;
   }
   private weatherRandom() {
@@ -306,6 +339,17 @@ export class GodWorld {
       this.record(
         `The flood claims ${flooded} tile${flooded === 1 ? "" : "s"}.`,
       );
+  }
+  private spark(dt: number) {
+    const bolts = lightningUnderRain(
+      this.map,
+      this.effects,
+      dt,
+      () => this.weatherRandom(),
+      MAX_EFFECTS - this.effects.length,
+    );
+    for (const bolt of bolts)
+      this.begin(bolt.kind, bolt.x, bolt.y, { message: bolt.message });
   }
   private removeDead() {
     let drowned = 0;
@@ -370,15 +414,12 @@ export class GodWorld {
       e.step++;
     }
     this.soak(dt);
+    this.spark(dt);
     this.removeDead();
     this.effects = this.effects.filter((e) => {
       if (e.age < e.duration) return true;
       GOD_ACTIONS[e.kind].finish?.(e, this.context);
-      this.record(
-        e.kind === "grow"
-          ? "New growth covers the ground."
-          : `${GOD_ACTIONS[e.kind].label} has faded.`,
-      );
+      this.record(`${GOD_ACTIONS[e.kind].label} has faded.`);
       return false;
     });
   }
@@ -406,8 +447,10 @@ export class GodWorld {
           this.elapsed,
           new Set(this.occupied.keys()),
         );
-        const withered = advanceCrops(this.map);
-        this.feed();
+        const season = gameDateAt(this.elapsed).season;
+        const withered = advanceCrops(this.map, season);
+        advanceVegetation(this.map);
+        this.feed(season);
         this.rollWeather();
         this.removeDead();
         if (result.repaired)
@@ -423,13 +466,14 @@ export class GodWorld {
       }
     }
     this.advancing = false;
+    if (changed) this.revision++;
     return changed;
   }
 
-  private feed() {
+  private feed(season: Season) {
     const living = this.mosslings.filter((m) => (m.health ?? 100) > 0);
     if (living.length === 0) return;
-    const supply = ripeTiles(this.map);
+    const supply = ripeTiles(this.map, season);
     const demand = living.reduce((sum, m) => sum + appetite(m.traits), 0);
     const ratio = demand <= 0 ? 1 : supply / demand;
     const perHead = supply / living.length;
@@ -453,7 +497,14 @@ export class GodWorld {
       const next = health - loss;
       m.health = starving ? Math.max(0, next) : Math.max(1, next);
     }
-    if (!starving) return;
+    const markStarved = () => {
+      for (const m of living)
+        if ((m.health ?? 100) <= 0) this.starved.add(m.id);
+    };
+    markStarved();
+    // A full table of health can last a foodless winter. The monthly cull would
+    // kill someone every month even at 100 health, so winter spends health only.
+    if (season === "Winter" || !starving) return;
     const deaths = Math.min(
       living.length,
       Math.max(1, Math.ceil((0.25 - perHead) * living.length)),
@@ -464,7 +515,7 @@ export class GodWorld {
       return (a.health ?? 100) - (b.health ?? 100);
     });
     for (const m of ranked.slice(0, deaths)) m.health = 0;
-    for (const m of living) if ((m.health ?? 100) <= 0) this.starved.add(m.id);
+    markStarved();
   }
 
   private ageCorpses() {
@@ -652,7 +703,12 @@ export class GodWorld {
   }
   snapshot(): WorldSnapshot {
     return {
-      resources: countWorldResources(this.map, this.mosslings, this.killed),
+      resources: countWorldResources(
+        this.map,
+        this.mosslings,
+        this.killed,
+        gameDateAt(this.elapsed).season,
+      ),
       map: {
         ...this.map,
         cells: this.map.cells.map((c) => ({
@@ -672,6 +728,8 @@ export class GodWorld {
     };
   }
   draw(painter: EffectPainter) {
-    for (const e of this.effects) GOD_ACTIONS[e.kind].draw(e, painter);
+    const season = gameDateAt(this.elapsed).season;
+    const painted = { ...painter, season };
+    for (const e of this.effects) GOD_ACTIONS[e.kind].draw(e, painted);
   }
 }

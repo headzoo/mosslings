@@ -5,7 +5,7 @@ import { PixelIcon } from "./PixelIcon";
 import { useMusic } from "./useMusic";
 export function Year({
   year = 1,
-  season = "Spring",
+  season = "Summer",
   rate = 1,
   isPlaying = true,
 }: {

@@ -101,7 +101,7 @@ export function WelcomeSplash({
         <h2>Your world. Their little lives.</h2>
         <p>
           This is a living sandbox. You shape the land; the Mosslings wander
-          through it. Bring rain, grow greenery, or unleash a disaster and see
+          through it. Bring rain, plant crops, or unleash a disaster and see
           how they respond. There’s no score to chase. Experiment, observe, and
           see what happens.
         </p>

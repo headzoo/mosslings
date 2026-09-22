@@ -1,10 +1,10 @@
 import type { MapCell, MapData } from "../map";
 import type { GodEffect, Point, PowerId } from "./types";
 
-/** About once a season. */
-export const RAIN_MONTH_CHANCE = 1 / 3;
-/** Share of showers that pick a crop tile when any exist. */
-export const CROP_RAIN_BIAS = 0.8;
+/** About twice a season. */
+export const RAIN_MONTH_CHANCE = 2 / 3;
+/** Share of showers that pick a crop tile when any exist. The rest seek trees, grass, and moss. */
+export const CROP_RAIN_BIAS = 0.35;
 export const NATURAL_RAIN_SECONDS = 3;
 export const NATURAL_RAIN_INTENSITY = 0.4;
 /** About once every six years. */
@@ -26,6 +26,8 @@ export const STORM_CLOUDS = 3;
  */
 export const FLOOD_THRESHOLD = 13;
 export const FLOOD_DECAY = 0.25;
+/** Expected lightning strikes per second under each rain cloud. */
+export const RAIN_LIGHTNING_RATE = 0.1;
 
 const STORM_OFFSETS = [
   [0, 0],
@@ -64,13 +66,16 @@ function pointOf(index: number, width: number): Point {
 
 function collect(map: MapData) {
   const crops: number[] = [];
+  const wild: number[] = [];
   const land: number[] = [];
   map.cells.forEach((cell, index) => {
     if (cell.terrain === "water") return;
     land.push(index);
     if (cell.growth !== undefined) crops.push(index);
+    if (cell.tree || (cell.terrain === "grass" && cell.growth === undefined))
+      wild.push(index);
   });
-  return { crops, land };
+  return { crops, wild, land };
 }
 
 function choose(
@@ -169,6 +174,37 @@ export function accumulateFlood(
   return flooded;
 }
 
+/** A bolt under a raining cloud, about one tenth of each second it falls. */
+export function lightningUnderRain(
+  map: MapData,
+  effects: readonly GodEffect[],
+  dt: number,
+  random: () => number,
+  freeSlots: number,
+): WeatherSpawn[] {
+  const spawns: WeatherSpawn[] = [];
+  if (dt <= 0) return spawns;
+  let slots = Math.max(0, freeSlots);
+  const chance = dt * RAIN_LIGHTNING_RATE;
+  for (const effect of effects) {
+    if (effect.kind !== "rain" || slots <= 0) continue;
+    if (random() >= chance) continue;
+    const tiles: number[] = [];
+    visitRadius(map, effect.x, effect.y, effect.radius, (_cell, index) => {
+      tiles.push(index);
+    });
+    const at = choose(tiles, random, map.width);
+    if (!at) continue;
+    spawns.push({
+      kind: "lightning",
+      ...at,
+      message: WILD_DISASTER.lightning,
+    });
+    slots--;
+  }
+  return spawns;
+}
+
 export function rollMonth(
   map: MapData,
   random: () => number,
@@ -178,11 +214,15 @@ export function rollMonth(
 ): WeatherRoll {
   const spawns: WeatherSpawn[] = [];
   let slots = Math.max(0, freeSlots);
-  const { crops, land } = collect(map);
+  const { crops, wild, land } = collect(map);
 
   if (slots > 0 && random() < RAIN_MONTH_CHANCE) {
     const preferCrop = crops.length > 0 && random() < CROP_RAIN_BIAS;
-    const at = choose(preferCrop ? crops : land, random, map.width);
+    const at = choose(
+      preferCrop ? crops : wild.length ? wild : land,
+      random,
+      map.width,
+    );
     if (at) {
       spawns.push({
         kind: "rain",

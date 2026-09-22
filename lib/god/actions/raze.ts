@@ -1,31 +1,52 @@
+import type { MapCell } from "../../map";
 import { connectedCellIndices, effect, ring } from "../shared";
-import type { GodAction } from "../types";
+import type { GodAction, GodContext } from "../types";
+
+function sow(world: GodContext, cell: MapCell) {
+  world.clearRecovery(cell);
+  cell.tree = undefined;
+  cell.terrain = "grass";
+  cell.damage = undefined;
+  cell.burning = false;
+  // A new field starts fully watered, so it can ripen instead of
+  // withering straight back into grass for the forest to reclaim.
+  if (cell.growth === undefined) {
+    cell.growth = 0;
+    cell.moisture = 1;
+  }
+}
 
 export const raze: GodAction = {
   id: "raze",
-  label: "Raze",
+  label: "Crops",
   canPlace(world, point) {
-    return world.cell(point.x, point.y)?.tree
-      ? null
-      : "Choose a forest tile to raze.";
+    const cell = world.cell(point.x, point.y);
+    if (cell?.tree) return null;
+    if (cell?.burning) return "Put out the fire before planting crops here.";
+    if (cell?.terrain === "water")
+      return "Crops needs ground or forest, not water.";
+    if (cell?.terrain === "rock")
+      return "Crops needs ground or forest, not stone.";
+    if (cell && (cell.terrain === "grass" || cell.terrain === "dirt"))
+      return null;
+    return "Choose a forest or ground tile for crops.";
   },
   create: (point, seed, id) => effect("raze", point, seed, id, 0.8, 2),
   update(e, world) {
     if (e.step !== 0) return;
+    const forest = !!world.cell(e.x, e.y)?.tree;
     for (const index of connectedCellIndices(
       world,
       e,
-      8,
-      (cell) => !!cell.tree,
-    )) {
-      const cell = world.map.cells[index];
-      world.damageTerrain(cell);
-      cell.tree = undefined;
-      cell.terrain = "dirt";
-      cell.growth = undefined;
-      cell.damage = undefined;
-      cell.burning = false;
-    }
+      forest ? world.map.width * world.map.height : 8,
+      (cell) =>
+        forest
+          ? !!cell.tree
+          : (cell.terrain === "grass" || cell.terrain === "dirt") &&
+            !cell.tree &&
+            !cell.burning,
+    ))
+      sow(world, world.map.cells[index]);
   },
   draw(e, painter) {
     ring(

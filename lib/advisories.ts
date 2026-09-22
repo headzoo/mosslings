@@ -1,4 +1,4 @@
-import { CROP_GROW_MOISTURE } from "./crops";
+import { CROP_GROW_LIGHT, CROP_GROW_MOISTURE } from "./crops";
 import type { MapData } from "./map";
 import type { PreviewMossling } from "./map-preview";
 import type { WorldResources } from "./world-resources";
@@ -6,12 +6,19 @@ import type { WorldResources } from "./world-resources";
 /** Repeat a warning that is still true only after this much real time. */
 export const ADVISORY_REPEAT_MS = 40_000;
 
-export type AdvisoryKind = "starve" | "wither" | "dry" | "health" | "shortage";
+export type AdvisoryKind =
+  | "starve"
+  | "wither"
+  | "dry"
+  | "shade"
+  | "health"
+  | "shortage";
 
 const ADVISORY_KINDS: readonly AdvisoryKind[] = [
   "starve",
   "wither",
   "dry",
+  "shade",
   "health",
   "shortage",
 ];
@@ -66,6 +73,13 @@ export function stepAdvisory(
   );
   const parched = crops.filter((cell) => cell.moisture < CROP_GROW_MOISTURE);
   const dry = crops.length > 0 && parched.length * 2 >= crops.length;
+  const unripe = crops.filter((cell) => (cell.growth ?? 0) < 1);
+  const shaded = unripe.filter(
+    (cell) =>
+      cell.moisture >= CROP_GROW_MOISTURE &&
+      (cell.light ?? 0) < CROP_GROW_LIGHT,
+  );
+  const shade = unripe.length > 0 && shaded.length * 2 >= unripe.length;
   const hungry = world.mosslings.some(
     (mossling) => (mossling.health ?? 100) > 0 && mossling.hungry,
   );
@@ -95,6 +109,7 @@ export function stepAdvisory(
   if (starve || starveEvent) active.push("starve");
   if (wither || witherEvent) active.push("wither");
   if (dry) active.push("dry");
+  if (shade) active.push("shade");
   if (healthFalling) active.push("health");
   if (shortage) active.push("shortage");
 

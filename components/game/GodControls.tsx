@@ -31,17 +31,14 @@ function GodButton({
 export function GodRain(props: ControlsProps) {
   return <GodButton {...props} name="Rain" icon="rain" power="rain" />;
 }
-export function GodGrow(props: ControlsProps) {
-  return <GodButton {...props} name="Grow" icon="grow" power="grow" />;
-}
-export function GodGround(props: ControlsProps) {
-  return <GodButton {...props} name="Ground" icon="ground" power="ground" />;
+export function GodSun(props: ControlsProps) {
+  return <GodButton {...props} name="Sun" icon="sun" power="sun" />;
 }
 export function GodRaze(props: ControlsProps) {
-  return <GodButton {...props} name="Raze" icon="raze" power="raze" />;
+  return <GodButton {...props} name="Crops" icon="carrot" power="raze" />;
 }
 export function GodDisease(props: ControlsProps) {
-  return <GodButton {...props} name="Disease" icon="skull" power="disease" />;
+  return <GodButton {...props} name="Disease" icon="virus" power="disease" />;
 }
 export function GodFire(props: ControlsProps) {
   return <GodButton {...props} name="Fire" icon="fire" power="fire" />;
@@ -65,8 +62,7 @@ export function GodControls(props: ControlsProps) {
     <aside className="god-rail" aria-label="God powers">
       <div className="god-buttons">
         <GodRain {...props} />
-        <GodGrow {...props} />
-        <GodGround {...props} />
+        <GodSun {...props} />
         <GodRaze {...props} />
         <GodDisease {...props} />
         <GodFire {...props} />
