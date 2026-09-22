@@ -1,4 +1,5 @@
 import type { PreviewMossling } from "../map-preview";
+import { addToBucket, eachInReach } from "./shared";
 import type { DisasterThreat, GodContext } from "./types";
 
 type Traits = ReadonlyMap<string, number>;
@@ -42,6 +43,19 @@ export class DisasterAvoidance {
   step(dt: number, world: GodContext, threats: DisasterThreat[]) {
     if (dt <= 0) return;
     const width = world.map.width;
+    let maxRadius = 0;
+    const threatBuckets = new Map<string, DisasterThreat[]>();
+    for (const threat of threats) {
+      maxRadius = Math.max(maxRadius, threat.radius);
+      addToBucket(threatBuckets, threat.x, threat.y, threat);
+    }
+    const localThreats = (x: number, y: number, pad: number) => {
+      const found: DisasterThreat[] = [];
+      eachInReach(threatBuckets, x, y, pad + maxRadius, (threat) => {
+        found.push(threat);
+      });
+      return found;
+    };
     // Read everyone before moving anyone, so herd signals don't cascade across the map.
     const observations = world.mosslings
       .filter((m) => (m.health ?? 100) > 0)
@@ -55,7 +69,7 @@ export class DisasterAvoidance {
         let danger = 0,
           awayX = 0,
           awayY = 0;
-        for (const threat of threats) {
+        for (const threat of localThreats(x, y, awareness)) {
           if (threat.alreadyHit?.has(m.id)) continue;
           const distance = Math.hypot(x - threat.x, y - threat.y);
           const tolerance =
@@ -157,7 +171,7 @@ export class DisasterAvoidance {
       if (state.credit + 1e-8 < 1) continue;
       state.credit -= 1;
       const herd = neighbors ? unit(herdX, herdY) : { x: 0, y: 0 };
-      this.escape(m, state, world, threats, herd, sociability);
+      this.escape(m, state, world, localThreats(x, y, 7), herd, sociability);
     }
   }
 

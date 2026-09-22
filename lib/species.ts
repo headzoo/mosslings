@@ -1,6 +1,11 @@
 import type { PreviewMossling } from "./map-preview";
-import { lineageClose, visualMatch } from "./species-similarity";
 import { speciesName } from "./species-name";
+import {
+  lineageGraph,
+  lineageHops,
+  MAX_LINEAGE_HOPS,
+  visualMatch,
+} from "./species-similarity";
 
 class UnionFind {
   private readonly parent: number[];
@@ -99,9 +104,7 @@ function canonicalMember(members: readonly PreviewMossling[]): PreviewMossling {
   }
   const bucket = buckets.get(bestKey) ?? members;
   return (
-    bucket.find((member) => member.id === bestId) ??
-    bucket[0] ??
-    members[0]
+    bucket.find((member) => member.id === bestId) ?? bucket[0] ?? members[0]
   );
 }
 
@@ -113,12 +116,13 @@ export function clusterSpecies(
   if (living.length === 0) return [];
 
   const forest = new UnionFind(living.length);
+  const lineage = lineageGraph(living);
   for (let left = 0; left < living.length; left++) {
     for (let right = left + 1; right < living.length; right++) {
       const a = living[left];
       const b = living[right];
       if (!a || !b) continue;
-      if (visualMatch(a, b) || lineageClose(a, b, living)) {
+      if (visualMatch(a, b) || lineageHops(a, b, lineage) <= MAX_LINEAGE_HOPS) {
         forest.union(left, right);
       }
     }

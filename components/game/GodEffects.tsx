@@ -5,13 +5,13 @@ import type { Camera } from "@/lib/map-camera";
 
 export function GodEffects({
   engine,
-  camera,
+  cameraRef,
   tileSize,
   width,
   height,
 }: {
   engine: GodWorld;
-  camera: Camera;
+  cameraRef: { current: Camera | null };
   tileSize: number;
   width: number;
   height: number;
@@ -22,8 +22,19 @@ export function GodEffects({
     const context = canvas?.getContext("2d");
     if (!canvas || !context) return;
     let frame = 0;
+    let clear = true;
     const render = () => {
+      const camera = cameraRef.current;
+      if (!camera || engine.effects.length === 0) {
+        if (!clear) {
+          context.clearRect(0, 0, canvas.width, canvas.height);
+          clear = true;
+        }
+        frame = requestAnimationFrame(render);
+        return;
+      }
       context.clearRect(0, 0, canvas.width, canvas.height);
+      clear = false;
       engine.draw({
         width: engine.map.width,
         height: engine.map.height,
@@ -54,7 +65,7 @@ export function GodEffects({
     };
     render();
     return () => cancelAnimationFrame(frame);
-  }, [engine, camera, tileSize, width, height]);
+  }, [engine, cameraRef, tileSize, width, height]);
   return (
     <canvas
       ref={ref}

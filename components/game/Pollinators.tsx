@@ -93,14 +93,14 @@ function drawPollinator(
 
 export function Pollinators({
   map,
-  camera,
+  cameraRef,
   tileSize,
   width,
   height,
   elapsed,
 }: {
   map: MapData;
-  camera: Camera;
+  cameraRef: { current: Camera | null };
   tileSize: number;
   width: number;
   height: number;
@@ -121,15 +121,22 @@ export function Pollinators({
     const context = canvas?.getContext("2d");
     if (!canvas || !context) return;
     let frame = 0;
+    let clear = true;
     const render = () => {
-      context.clearRect(0, 0, canvas.width, canvas.height);
-      const current = mapRef.current;
+      const camera = cameraRef.current;
       const season = gameDateAt(elapsedRef.current()).season;
-      if (!pollinatorsActive(season)) {
+      if (!camera || !pollinatorsActive(season)) {
+        if (!clear) {
+          context.clearRect(0, 0, canvas.width, canvas.height);
+          clear = true;
+        }
         frame = requestAnimationFrame(render);
         return;
       }
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      clear = false;
       context.globalAlpha = 1;
+      const current = mapRef.current;
       for (const pollinator of pollinatorsRef.current) {
         drawPollinator(
           context,
@@ -146,7 +153,7 @@ export function Pollinators({
     };
     render();
     return () => cancelAnimationFrame(frame);
-  }, [camera, tileSize, width, height]);
+  }, [cameraRef, tileSize, width, height]);
   return (
     <canvas
       ref={ref}

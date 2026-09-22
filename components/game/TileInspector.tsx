@@ -10,8 +10,6 @@ import {
   snowDepth,
 } from "@/lib/map-preview";
 import { previewTraits } from "@/lib/mossling-traits";
-import { speciesKeyFor } from "@/lib/species";
-import { speciesName } from "@/lib/species-name";
 
 import { MosslingPortrait } from "./MosslingPortrait";
 import { TilePortrait } from "./TilePortrait";
@@ -49,8 +47,8 @@ export function TileInspector({
   y,
   cell,
   map,
-  mosslings,
   mossling,
+  speciesName,
   hostRef,
   onClose,
   onMove,
@@ -62,8 +60,8 @@ export function TileInspector({
   y: number;
   cell: MapCell;
   map?: MapData | null;
-  mosslings: readonly PreviewMossling[];
   mossling?: PreviewMossling;
+  speciesName?: string;
   hostRef: RefObject<HTMLDivElement | null>;
   onClose: () => void;
   onMove?: () => void;
@@ -85,9 +83,7 @@ export function TileInspector({
   const traits = mossling
     ? (mossling.traits ?? previewTraits(seed, mossling.id))
     : [];
-  const title = mossling
-    ? speciesName(speciesKeyFor(mossling, mosslings))
-    : info.title;
+  const title = mossling ? (speciesName ?? info.title) : info.title;
   const look = foliageAt(elapsed?.() ?? 0);
   const snow = map ? snowDepth(map, y * map.width + x, look.snow) : 0;
   const ice = map ? iceCover(y * map.width + x, look.ice) : look.ice;

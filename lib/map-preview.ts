@@ -1,6 +1,7 @@
 import { foliageAt, MONTH_SECONDS, type SeasonLook } from "./game-time";
 
 export type { SeasonLook } from "./game-time";
+
 import { plagueShade } from "./god/disease";
 import type { MapCell, MapData } from "./map";
 import { brownBlend, mixHex } from "./vegetation";
@@ -695,6 +696,68 @@ export function paintCell(
   }
 }
 
+const SPRITE_LIMIT = 256;
+const PULSE_STEPS = 8;
+const sprites = new Map<string, HTMLCanvasElement>();
+
+function pulseBucket(mossling: PreviewMossling, elapsed: number): number {
+  const ritual = mossling.ritual;
+  if (!ritual || (mossling.health ?? 100) <= 0) return 0;
+  const wave = Math.sin(
+    (2 * Math.PI * (elapsed - ritual.since)) / MONTH_SECONDS,
+  );
+  return Math.round(wave * PULSE_STEPS);
+}
+
+function spriteKey(mossling: PreviewMossling, elapsed: number): string {
+  if ((mossling.health ?? 100) <= 0) return "dead";
+  return [
+    mossling.pattern,
+    mossling.colors.join("."),
+    mossling.plagueMonths ?? "",
+    mossling.ritual?.since ?? "",
+    pulseBucket(mossling, elapsed),
+  ].join("|");
+}
+
+function hexPixel(data: Uint8ClampedArray, x: number, y: number, hex: string) {
+  const value = Number.parseInt(hex.slice(1), 16);
+  const index = (y * TILE_SIZE + x) * 4;
+  data[index] = (value >> 16) & 255;
+  data[index + 1] = (value >> 8) & 255;
+  data[index + 2] = value & 255;
+  data[index + 3] = 255;
+}
+
+/** One 8×8 blit for a look. Courting colors share a sprite across nearby frames. */
+function mosslingSprite(
+  mossling: PreviewMossling,
+  elapsed: number,
+): HTMLCanvasElement | null {
+  if (typeof document === "undefined") return null;
+  const key = spriteKey(mossling, elapsed);
+  const cached = sprites.get(key);
+  if (cached) return cached;
+  const canvas = document.createElement("canvas");
+  canvas.width = TILE_SIZE;
+  canvas.height = TILE_SIZE;
+  const sprite = canvas.getContext("2d");
+  if (!sprite) return null;
+  const image = sprite.createImageData(TILE_SIZE, TILE_SIZE);
+  for (let y = 0; y < TILE_SIZE; y++) {
+    for (let x = 0; x < TILE_SIZE; x++) {
+      hexPixel(image.data, x, y, paintedMosslingColor(mossling, x, y, elapsed));
+    }
+  }
+  sprite.putImageData(image, 0, 0);
+  if (sprites.size >= SPRITE_LIMIT) {
+    const oldest = sprites.keys().next().value;
+    if (oldest !== undefined) sprites.delete(oldest);
+  }
+  sprites.set(key, canvas);
+  return canvas;
+}
+
 export function paintMossling(
   context: CanvasRenderingContext2D,
   map: Pick<MapData, "width">,
@@ -709,10 +772,15 @@ export function paintMossling(
     context.fillRect(left, top, 1, 1);
     return;
   }
-  for (let y = 0; y < TILE_SIZE; y++) {
-    for (let x = 0; x < TILE_SIZE; x++) {
-      context.fillStyle = paintedMosslingColor(mossling, x, y, elapsed);
-      context.fillRect(left + x, top + y, 1, 1);
+  const sprite =
+    tileSize === TILE_SIZE ? mosslingSprite(mossling, elapsed) : null;
+  if (sprite) context.drawImage(sprite, left, top);
+  else {
+    for (let y = 0; y < TILE_SIZE; y++) {
+      for (let x = 0; x < TILE_SIZE; x++) {
+        context.fillStyle = paintedMosslingColor(mossling, x, y, elapsed);
+        context.fillRect(left + x, top + y, 1, 1);
+      }
     }
   }
   if ((mossling.panic ?? 0) > 0.1) {

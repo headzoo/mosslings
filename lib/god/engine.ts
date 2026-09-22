@@ -8,12 +8,12 @@ import {
 import type { MapData } from "../map";
 import type { PreviewMossling } from "../map-preview";
 import { previewTraits } from "../mossling-traits";
-import { advanceVegetation } from "../vegetation";
 import {
   ResourceHistory,
-  sampleFromResources,
   type ResourceHistorySample,
+  sampleFromResources,
 } from "../resource-history";
+import { advanceVegetation } from "../vegetation";
 import { countWorldResources, type WorldResources } from "../world-resources";
 import { GOD_ACTIONS } from "./actions";
 import { DisasterAvoidance } from "./avoidance";
@@ -26,6 +26,7 @@ import {
 } from "./disease";
 import { WorldEcology } from "./ecology";
 import { mateMonth } from "./mating";
+import { addToBucket, eachInReach } from "./shared";
 import type {
   EffectPainter,
   GodContext,
@@ -41,12 +42,15 @@ import {
   rollMonth,
 } from "./weather";
 
-export interface WorldSnapshot {
-  map: MapData;
+export interface WorldView {
   mosslings: PreviewMossling[];
   events: WorldEvent[];
   resources: WorldResources;
   resourceHistory: ResourceHistorySample[];
+}
+
+export interface WorldSnapshot extends WorldView {
+  map: MapData;
 }
 const MAX_EFFECTS = 16;
 export const EFFECT_CAP_MESSAGE = "Let a few active powers finish first.";
@@ -637,10 +641,35 @@ export class GodWorld {
       );
   }
 
-  private spreadPlague() {
-    if (!this.mosslings.some((m) => m.plagueMonths !== undefined)) return;
+  private carrierBuckets() {
     const width = this.map.width;
-    const carriers = this.mosslings.filter((m) => m.plagueMonths !== undefined);
+    const buckets = new Map<
+      string,
+      { id: number; x: number; y: number; order: number }[]
+    >();
+    let count = 0;
+    this.mosslings.forEach((carrier, order) => {
+      if (carrier.plagueMonths === undefined) return;
+      count++;
+      addToBucket(
+        buckets,
+        carrier.cellIndex % width,
+        Math.floor(carrier.cellIndex / width),
+        {
+          id: carrier.id,
+          x: carrier.cellIndex % width,
+          y: Math.floor(carrier.cellIndex / width),
+          order,
+        },
+      );
+    });
+    return count > 0 ? buckets : null;
+  }
+
+  private spreadPlague() {
+    const carriers = this.carrierBuckets();
+    if (!carriers) return;
+    const width = this.map.width;
     let infected = 0;
     for (const m of this.mosslings) {
       if (m.plagueMonths !== undefined || (m.health ?? 100) <= 0) continue;
@@ -649,10 +678,10 @@ export class GodWorld {
       );
       const x = m.cellIndex % width;
       const y = Math.floor(m.cellIndex / width);
-      const hit = carriers.some((carrier) => {
-        const cx = carrier.cellIndex % width;
-        const cy = Math.floor(carrier.cellIndex / width);
-        return chebyshev(x, y, cx, cy) <= range;
+      let hit = false;
+      eachInReach(carriers, x, y, range, (carrier) => {
+        if (hit) return;
+        if (chebyshev(x, y, carrier.x, carrier.y) <= range) hit = true;
       });
       if (!hit) continue;
       m.plagueMonths = 0;
@@ -661,17 +690,29 @@ export class GodWorld {
     if (infected) this.record(caught(infected));
   }
 
-  private nearestCarrier(x: number, y: number, id: number) {
-    const width = this.map.width;
-    let best: { x: number; y: number; distance: number } | undefined;
-    for (const carrier of this.mosslings) {
-      if (carrier.id === id || carrier.plagueMonths === undefined) continue;
-      const cx = carrier.cellIndex % width;
-      const cy = Math.floor(carrier.cellIndex / width);
-      const distance = chebyshev(x, y, cx, cy);
-      if (distance > PLAGUE_SENSE) continue;
-      if (!best || distance < best.distance) best = { x: cx, y: cy, distance };
-    }
+  private nearestCarrier(
+    carriers: Map<
+      string,
+      { id: number; x: number; y: number; order: number }[]
+    >,
+    x: number,
+    y: number,
+    id: number,
+  ) {
+    let best:
+      | { x: number; y: number; distance: number; order: number }
+      | undefined;
+    eachInReach(carriers, x, y, PLAGUE_SENSE, (carrier) => {
+      if (carrier.id === id) return;
+      const distance = chebyshev(x, y, carrier.x, carrier.y);
+      if (distance > PLAGUE_SENSE) return;
+      if (
+        !best ||
+        distance < best.distance ||
+        (distance === best.distance && carrier.order < best.order)
+      )
+        best = { x: carrier.x, y: carrier.y, distance, order: carrier.order };
+    });
     return best;
   }
 
@@ -741,6 +782,7 @@ export class GodWorld {
 
   private wander(holding: ReadonlySet<number>) {
     const random = () => this.random();
+    const carriers = this.carrierBuckets();
     // Rotate visitation order. Healthy Mosslings near the black death
     // bias that step; everyone else still shuffles their neighbors.
     const start = Math.floor(random() * this.mosslings.length);
@@ -756,8 +798,8 @@ export class GodWorld {
         x = origin % this.map.width,
         y = Math.floor(origin / this.map.width);
       const carrier =
-        m.plagueMonths === undefined
-          ? this.nearestCarrier(x, y, m.id)
+        m.plagueMonths === undefined && carriers
+          ? this.nearestCarrier(carriers, x, y, m.id)
           : undefined;
       const toward = carrier ? this.diseaseHeading(m, random) : null;
       const directions = [
@@ -797,8 +839,21 @@ export class GodWorld {
       }
     }
   }
-  snapshot(): WorldSnapshot {
+  private copyMosslings(): PreviewMossling[] {
+    return this.mosslings.map((m) => ({
+      ...m,
+      colors: [...m.colors],
+      traits: m.traits?.map((trait) => ({ ...trait })),
+      wontMate: m.wontMate ? [...m.wontMate] : undefined,
+      parents: m.parents ? ([...m.parents] as [number, number]) : undefined,
+      ritual: m.ritual ? { ...m.ritual } : undefined,
+    }));
+  }
+  /** UI publish. The live map stays on the engine; canvases repaint from revision. */
+  view(): WorldView {
     return {
+      mosslings: this.copyMosslings(),
+      events: [...this.events],
       resources: countWorldResources(
         this.map,
         this.mosslings,
@@ -806,6 +861,12 @@ export class GodWorld {
         this.born,
         foliageAt(this.elapsed).crop,
       ),
+      resourceHistory: this.resourceHistory.values(),
+    };
+  }
+  snapshot(): WorldSnapshot {
+    return {
+      ...this.view(),
       map: {
         ...this.map,
         cells: this.map.cells.map((c) => ({
@@ -813,16 +874,6 @@ export class GodWorld {
           tree: c.tree ? { ...c.tree } : undefined,
         })),
       },
-      mosslings: this.mosslings.map((m) => ({
-        ...m,
-        colors: [...m.colors],
-        traits: m.traits?.map((trait) => ({ ...trait })),
-        wontMate: m.wontMate ? [...m.wontMate] : undefined,
-        parents: m.parents ? ([...m.parents] as [number, number]) : undefined,
-        ritual: m.ritual ? { ...m.ritual } : undefined,
-      })),
-      events: [...this.events],
-      resourceHistory: this.resourceHistory.values(),
     };
   }
   draw(painter: EffectPainter) {

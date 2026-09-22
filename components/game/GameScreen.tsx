@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -23,13 +24,13 @@ import {
   introSpotlightRadiusPx,
 } from "@/lib/intro-mosslings";
 import type { MapCell, MapData } from "@/lib/map";
-import { getCamera } from "@/lib/map-camera";
+import { type Camera, getCamera } from "@/lib/map-camera";
 import type { PreviewMossling } from "@/lib/map-preview";
 import {
   clusterSpecies,
   nearestMember,
   type SpeciesGroup,
-  speciesKeyFor,
+  speciesKey,
 } from "@/lib/species";
 import { speciesName } from "@/lib/species-name";
 import { CropIntro } from "./CropIntro";
@@ -151,6 +152,7 @@ export function GameScreen({
   const [center, setCenter] = useState(DEFAULT_CENTER);
   const [moveMode, setMoveMode] = useState(false);
   const [panning, setPanning] = useState(false);
+  const cameraRef = useRef<Camera | null>(null);
   const cameraAnim = useRef<number | null>(null);
   const cameraState = useRef({
     center: DEFAULT_CENTER,
@@ -324,6 +326,7 @@ export function GameScreen({
     };
   }, [zoom]);
   const camera = map ? getCamera(map, viewport, tileSize, center) : null;
+  cameraRef.current = camera;
   const introSpotlight =
     introPhase === "mosslings" && map && camera
       ? (() => {
@@ -475,11 +478,10 @@ export function GameScreen({
       speciesKey: group.key,
     });
   };
+  const species = useMemo(() => clusterSpecies(mosslings), [mosslings]);
   useEffect(() => {
     if (!map || !selection?.speciesKey || selection.seed !== map.seed) return;
-    const group = clusterSpecies(mosslings).find(
-      (item) => item.key === selection.speciesKey,
-    );
+    const group = species.find((item) => item.key === selection.speciesKey);
     if (!group) {
       setSelection(null);
       return;
@@ -507,13 +509,20 @@ export function GameScreen({
       mossling: { ...next },
       speciesKey: group.key,
     });
-  }, [map, camera, mosslings, selection]);
+  }, [map, camera, mosslings, selection, species]);
   const selected = selection?.seed === map?.seed ? selection : null;
-  const species = clusterSpecies(mosslings);
   const highlighted = selected?.speciesKey
     ? (species.find((group) => group.key === selected.speciesKey)?.members ??
       [])
     : [];
+  const selectedMossling = selected?.mossling
+    ? mosslings.find((item) => item.id === selected.mossling?.id)
+    : undefined;
+  const selectedSpeciesName = selectedMossling
+    ? (species.find((group) =>
+        group.members.some((member) => member.id === selectedMossling.id),
+      )?.name ?? speciesName(speciesKey(selectedMossling)))
+    : undefined;
   return (
     <main className="game-screen">
       <header className="game-header">
@@ -770,7 +779,7 @@ export function GameScreen({
             {map && camera && (
               <Pollinators
                 map={map}
-                camera={camera}
+                cameraRef={cameraRef}
                 tileSize={tileSize}
                 width={viewport.width}
                 height={viewport.height}
@@ -783,7 +792,7 @@ export function GameScreen({
                 seed={map.seed}
                 mapWidth={map.width}
                 mapHeight={map.height}
-                camera={camera}
+                cameraRef={cameraRef}
                 tileSize={tileSize}
                 width={viewport.width}
                 height={viewport.height}
@@ -793,7 +802,7 @@ export function GameScreen({
             {engine && camera && (
               <GodEffects
                 engine={engine}
-                camera={camera}
+                cameraRef={cameraRef}
                 tileSize={tileSize}
                 width={viewport.width}
                 height={viewport.height}
@@ -900,12 +909,8 @@ export function GameScreen({
                 y={selected.y}
                 cell={selected.cell}
                 map={map}
-                mosslings={mosslings}
-                mossling={
-                  selected.mossling
-                    ? mosslings.find((m) => m.id === selected.mossling?.id)
-                    : undefined
-                }
+                mossling={selectedMossling}
+                speciesName={selectedSpeciesName}
                 hostRef={viewportRef}
                 onClose={() => setSelection(null)}
                 onMove={
@@ -917,7 +922,8 @@ export function GameScreen({
                         if (!mossling || (mossling.health ?? 100) <= 0) return;
                         beginMosslingTarget(
                           mossling.id,
-                          speciesName(speciesKeyFor(mossling, mosslings)),
+                          selectedSpeciesName ??
+                            speciesName(speciesKey(mossling)),
                           "move",
                         );
                       }
@@ -932,7 +938,8 @@ export function GameScreen({
                         if (!mossling || (mossling.health ?? 100) <= 0) return;
                         beginMosslingTarget(
                           mossling.id,
-                          speciesName(speciesKeyFor(mossling, mosslings)),
+                          selectedSpeciesName ??
+                            speciesName(speciesKey(mossling)),
                           "clone",
                         );
                       }

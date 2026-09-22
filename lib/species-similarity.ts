@@ -85,7 +85,10 @@ function buildLineageGraph(living: readonly PreviewMossling[]) {
       else childrenOf.set(parentId, [mossling.id]);
     }
   }
-  const neighbors = (id: number): number[] => {
+  const neighborIds = new Map<number, number[]>();
+  const neighbors = (id: number): readonly number[] => {
+    const cached = neighborIds.get(id);
+    if (cached) return cached;
     const next = new Set<number>();
     const mossling = byId.get(id);
     if (mossling?.parents) {
@@ -97,9 +100,42 @@ function buildLineageGraph(living: readonly PreviewMossling[]) {
       }
     }
     for (const childId of childrenOf.get(id) ?? []) next.add(childId);
-    return [...next];
+    const list = [...next];
+    neighborIds.set(id, list);
+    return list;
   };
   return { neighbors };
+}
+
+export type LineageGraph = ReturnType<typeof buildLineageGraph>;
+
+/** One graph for a whole clustering pass. Hop searches share it. */
+export function lineageGraph(living: readonly PreviewMossling[]): LineageGraph {
+  return buildLineageGraph(living);
+}
+
+/** Shortest hop count through a graph already built for this population. */
+export function lineageHops(
+  a: PreviewMossling,
+  b: PreviewMossling,
+  graph: LineageGraph,
+  maxHops = MAX_LINEAGE_HOPS,
+): number {
+  if (a.id === b.id) return 0;
+  const queue: { id: number; depth: number }[] = [{ id: a.id, depth: 0 }];
+  const visited = new Set<number>([a.id]);
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) break;
+    if (current.id === b.id) return current.depth;
+    if (current.depth >= maxHops) continue;
+    for (const nextId of graph.neighbors(current.id)) {
+      if (visited.has(nextId)) continue;
+      visited.add(nextId);
+      queue.push({ id: nextId, depth: current.depth + 1 });
+    }
+  }
+  return Infinity;
 }
 
 /** Shortest hop count through parent/child/sibling links, or Infinity. */
@@ -109,22 +145,7 @@ export function lineageDistance(
   living: readonly PreviewMossling[],
   maxHops = MAX_LINEAGE_HOPS,
 ): number {
-  if (a.id === b.id) return 0;
-  const { neighbors } = buildLineageGraph(living);
-  const queue: { id: number; depth: number }[] = [{ id: a.id, depth: 0 }];
-  const visited = new Set<number>([a.id]);
-  while (queue.length > 0) {
-    const current = queue.shift();
-    if (!current) break;
-    if (current.id === b.id) return current.depth;
-    if (current.depth >= maxHops) continue;
-    for (const nextId of neighbors(current.id)) {
-      if (visited.has(nextId)) continue;
-      visited.add(nextId);
-      queue.push({ id: nextId, depth: current.depth + 1 });
-    }
-  }
-  return Infinity;
+  return lineageHops(a, b, buildLineageGraph(living), maxHops);
 }
 
 export function lineageClose(

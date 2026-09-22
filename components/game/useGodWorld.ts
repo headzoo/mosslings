@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { GameDate } from "@/lib/game-time";
-import { GodWorld, type WorldSnapshot } from "@/lib/god/engine";
+import { GodWorld, type WorldView } from "@/lib/god/engine";
 import type { PowerId } from "@/lib/god/types";
 import type { MapData } from "@/lib/map";
 import type { PreviewMossling } from "@/lib/map-preview";
@@ -13,7 +13,7 @@ export function useGodWorld(
   getElapsed: () => number,
 ) {
   const [engine, setEngine] = useState<GodWorld | null>(null);
-  const [snapshot, setSnapshot] = useState<WorldSnapshot | null>(null);
+  const [snapshot, setSnapshot] = useState<WorldView | null>(null);
   const revisionRef = useRef(0);
   const dirtyRef = useRef(false);
   useEffect(() => {
@@ -22,7 +22,7 @@ export function useGodWorld(
     revisionRef.current = world.revision;
     dirtyRef.current = false;
     setEngine(world);
-    setSnapshot(world.snapshot());
+    setSnapshot(world.view());
     let frame = 0,
       last = performance.now(),
       sincePublish = 0;
@@ -33,7 +33,7 @@ export function useGodWorld(
       revisionRef.current = world.revision;
       sincePublish += elapsed;
       if (dirtyRef.current && sincePublish >= 0.1) {
-        setSnapshot(world.snapshot());
+        setSnapshot(world.view());
         sincePublish = 0;
         dirtyRef.current = false;
       }

@@ -7,6 +7,7 @@ import { type SkyCloud, skyCloudsAt } from "@/lib/sky-clouds";
 const BODY = "#d2e0e4";
 const SHADE = "#889ead";
 const SHADOW = "#102018";
+const cloudSprites = new Map<string, HTMLCanvasElement>();
 
 /** Inclusive column spans as fractions of the cloud width, top to bottom. */
 const SHAPES: Array<Array<[number, number]>> = [
@@ -29,29 +30,50 @@ const SHAPES: Array<Array<[number, number]>> = [
   ],
 ];
 
-function paint(
+function stamp(
   context: CanvasRenderingContext2D,
-  camera: Camera,
-  tileSize: number,
-  viewWidth: number,
-  viewHeight: number,
   x: number,
   y: number,
   color: string,
   alpha: number,
 ) {
-  const px = Math.round(camera.left + x * tileSize);
-  const py = Math.round(camera.top + y * tileSize);
-  if (
-    px > viewWidth ||
-    py > viewHeight ||
-    px + tileSize < 0 ||
-    py + tileSize < 0
-  )
-    return;
   context.globalAlpha = alpha;
   context.fillStyle = color;
-  context.fillRect(px, py, Math.max(1, tileSize), Math.max(1, tileSize));
+  context.fillRect(x, y, 1, 1);
+}
+
+/** One pixel per tile, including the shadow pad, reused for every copy of this shape. */
+function cloudSprite(cloud: SkyCloud): HTMLCanvasElement | null {
+  if (typeof document === "undefined") return null;
+  const key = `${cloud.silhouette}:${cloud.width}:${cloud.height}`;
+  const cached = cloudSprites.get(key);
+  if (cached) return cached;
+  const shape = SHAPES[cloud.silhouette] ?? SHAPES[0];
+  const rows = shape.slice(Math.max(0, shape.length - cloud.height));
+  const pad = 1;
+  const canvas = document.createElement("canvas");
+  canvas.width = cloud.width + pad * 2;
+  canvas.height = cloud.height + 2;
+  const sprite = canvas.getContext("2d");
+  if (!sprite) return null;
+  const bottom = rows[rows.length - 1];
+  const x0 = Math.floor(bottom[0] * cloud.width);
+  const x1 = Math.max(x0, Math.ceil(bottom[1] * cloud.width) - 1);
+  for (let row = 1; row <= 2; row++) {
+    for (let col = x0 - 1; col <= x1 + 1; col++) {
+      stamp(sprite, col + pad, cloud.height - 1 + row, SHADOW, 0.16);
+    }
+  }
+  rows.forEach((span, row) => {
+    const left = Math.floor(span[0] * cloud.width);
+    const right = Math.max(left, Math.ceil(span[1] * cloud.width) - 1);
+    const color = row === rows.length - 1 ? SHADE : BODY;
+    for (let col = left; col <= right; col++)
+      stamp(sprite, col + pad, row, color, 0.88);
+  });
+  sprite.globalAlpha = 1;
+  cloudSprites.set(key, canvas);
+  return canvas;
 }
 
 function drawCloud(
@@ -62,51 +84,22 @@ function drawCloud(
   viewHeight: number,
   cloud: SkyCloud,
 ) {
-  const shape = SHAPES[cloud.silhouette] ?? SHAPES[0];
-  const rows = shape.slice(Math.max(0, shape.length - cloud.height));
-  const bottom = rows[rows.length - 1];
-  const x0 = Math.floor(bottom[0] * cloud.width);
-  const x1 = Math.max(x0, Math.ceil(bottom[1] * cloud.width) - 1);
-  for (let row = 1; row <= 2; row++) {
-    for (let col = x0 - 1; col <= x1 + 1; col++) {
-      paint(
-        context,
-        camera,
-        tileSize,
-        viewWidth,
-        viewHeight,
-        cloud.x + col,
-        cloud.y + cloud.height - 1 + row,
-        SHADOW,
-        0.16,
-      );
-    }
-  }
-  rows.forEach((span, row) => {
-    const left = Math.floor(span[0] * cloud.width);
-    const right = Math.max(left, Math.ceil(span[1] * cloud.width) - 1);
-    const color = row === rows.length - 1 ? SHADE : BODY;
-    for (let col = left; col <= right; col++) {
-      paint(
-        context,
-        camera,
-        tileSize,
-        viewWidth,
-        viewHeight,
-        cloud.x + col,
-        cloud.y + row,
-        color,
-        0.88,
-      );
-    }
-  });
+  const sprite = cloudSprite(cloud);
+  if (!sprite) return;
+  const px = Math.round(camera.left + (cloud.x - 1) * tileSize);
+  const py = Math.round(camera.top + cloud.y * tileSize);
+  const width = sprite.width * tileSize;
+  const height = sprite.height * tileSize;
+  if (px > viewWidth || py > viewHeight || px + width < 0 || py + height < 0)
+    return;
+  context.drawImage(sprite, px, py, width, height);
 }
 
 export function SkyClouds({
   seed,
   mapWidth,
   mapHeight,
-  camera,
+  cameraRef,
   tileSize,
   width,
   height,
@@ -115,7 +108,7 @@ export function SkyClouds({
   seed: number;
   mapWidth: number;
   mapHeight: number;
-  camera: Camera;
+  cameraRef: { current: Camera | null };
   tileSize: number;
   width: number;
   height: number;
@@ -128,23 +121,36 @@ export function SkyClouds({
     const canvas = ref.current;
     const context = canvas?.getContext("2d");
     if (!canvas || !context) return;
+    context.imageSmoothingEnabled = false;
     let frame = 0;
+    let clear = true;
     const render = () => {
-      context.clearRect(0, 0, canvas.width, canvas.height);
-      for (const cloud of skyCloudsAt(
+      const camera = cameraRef.current;
+      const clouds = skyCloudsAt(
         elapsedRef.current(),
         seed,
         mapWidth,
         mapHeight,
-      )) {
-        drawCloud(context, camera, tileSize, width, height, cloud);
+      );
+      if (!camera || clouds.length === 0) {
+        if (!clear) {
+          context.clearRect(0, 0, canvas.width, canvas.height);
+          context.globalAlpha = 1;
+          clear = true;
+        }
+        frame = requestAnimationFrame(render);
+        return;
       }
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      clear = false;
+      for (const cloud of clouds)
+        drawCloud(context, camera, tileSize, width, height, cloud);
       context.globalAlpha = 1;
       frame = requestAnimationFrame(render);
     };
     render();
     return () => cancelAnimationFrame(frame);
-  }, [seed, mapWidth, mapHeight, camera, tileSize, width, height]);
+  }, [seed, mapWidth, mapHeight, cameraRef, tileSize, width, height]);
   return (
     <canvas
       ref={ref}

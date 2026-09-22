@@ -1,5 +1,6 @@
 import type { PreviewMossling } from "../map-preview";
 import { approachRadius, blendTraits, matingChance } from "../mossling-traits";
+import { addToBucket, eachInReach } from "./shared";
 
 export interface MateMonthResult {
   born: number;
@@ -237,25 +238,35 @@ export function mateMonth(input: MateMonthInput): MateMonthResult {
   const at = new Map(
     free.map((mossling) => [mossling.id, pos(mossling.cellIndex, width)]),
   );
+  const nearby = new Map<string, PreviewMossling[]>();
+  const freeIndex = new Map(
+    free.map((mossling, index) => [mossling.id, index]),
+  );
+  for (const mossling of free) {
+    const origin = at.get(mossling.id);
+    if (origin) addToBucket(nearby, origin.x, origin.y, mossling);
+  }
   const adjacent: {
     a: PreviewMossling;
     b: PreviewMossling;
     chance: number;
   }[] = [];
-  for (let i = 0; i < free.length; i++) {
-    for (let j = i + 1; j < free.length; j++) {
-      const a = free[i];
-      const b = free[j];
-      if (!a || !b || rejects(a, b.id) || rejects(b, a.id)) continue;
-      const originA = at.get(a.id);
+  for (const a of free) {
+    const originA = at.get(a.id);
+    if (!originA) continue;
+    eachInReach(nearby, originA.x, originA.y, 1, (b) => {
+      const left = freeIndex.get(a.id) ?? 0;
+      const right = freeIndex.get(b.id) ?? 0;
+      if (right <= left) return;
+      if (rejects(a, b.id) || rejects(b, a.id)) return;
       const originB = at.get(b.id);
-      if (!originA || !originB) continue;
+      if (!originB) return;
       const distance = chebyshev(originA, originB);
       const reachA = approachRadius(a.traits);
       const reachB = approachRadius(b.traits);
       if (distance <= 1 && distance <= reachA && distance <= reachB)
         adjacent.push({ a, b, chance: matingChance(a.traits, b.traits) });
-    }
+    });
   }
   adjacent.sort(
     (left, right) =>
@@ -288,13 +299,13 @@ export function mateMonth(input: MateMonthInput): MateMonthResult {
     let best:
       | { target: PreviewMossling; chance: number; distance: number }
       | undefined;
-    for (const other of free) {
-      if (other.id === mossling.id || bonded.has(other.id)) continue;
-      if (rejects(mossling, other.id) || rejects(other, mossling.id)) continue;
+    eachInReach(nearby, origin.x, origin.y, reach, (other) => {
+      if (other.id === mossling.id || bonded.has(other.id)) return;
+      if (rejects(mossling, other.id) || rejects(other, mossling.id)) return;
       const there = at.get(other.id);
-      if (!there) continue;
+      if (!there) return;
       const distance = chebyshev(origin, there);
-      if (distance <= 1 || distance > reach) continue;
+      if (distance <= 1 || distance > reach) return;
       const chance = matingChance(mossling.traits, other.traits);
       if (
         !best ||
@@ -303,7 +314,7 @@ export function mateMonth(input: MateMonthInput): MateMonthResult {
           (distance < best.distance || other.id < best.target.id))
       )
         best = { target: other, chance, distance };
-    }
+    });
     if (!best) continue;
     const there = at.get(best.target.id);
     if (!there) continue;

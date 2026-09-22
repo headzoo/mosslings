@@ -43,7 +43,18 @@ function spec(seed: number, index: number, mapHeight: number) {
 /**
  * Clouds crossing the map at this game time.
  * One cloud is in the sky at a time. A gap follows each crossing.
+ * A cursor resumes from the last cloud when time moves forward on the same map.
  */
+type CloudCursor = {
+  seed: number;
+  mapWidth: number;
+  mapHeight: number;
+  index: number;
+  start: number;
+};
+
+let cloudCursor: CloudCursor | null = null;
+
 export function skyCloudsAt(
   elapsed: number,
   seed: number,
@@ -58,17 +69,33 @@ export function skyCloudsAt(
   ) {
     return [];
   }
-  const clouds: SkyCloud[] = [];
+  let index = 0;
   let start = LEAD_MIN + unit(seed, 0, 5) * LEAD_SPAN;
-  for (let index = 0; start <= elapsed; index++) {
+  if (
+    cloudCursor &&
+    cloudCursor.seed === seed &&
+    cloudCursor.mapWidth === mapWidth &&
+    cloudCursor.mapHeight === mapHeight &&
+    elapsed >= cloudCursor.start
+  ) {
+    index = cloudCursor.index;
+    start = cloudCursor.start;
+  }
+  const clouds: SkyCloud[] = [];
+  while (start <= elapsed) {
     const cloud = spec(seed, index, mapHeight);
     const duration = (mapWidth + cloud.width) / CLOUD_SPEED;
     const x = -cloud.width + (elapsed - start) * CLOUD_SPEED;
-    if (x < mapWidth && x + cloud.width > 0) {
-      clouds.push({ ...cloud, x });
-    }
+    if (x < mapWidth && x + cloud.width > 0) clouds.push({ ...cloud, x });
     const gap = GAP_MIN + unit(seed, index, 6) * GAP_SPAN;
-    start += duration + gap;
+    const nextStart = start + duration + gap;
+    if (nextStart > elapsed) {
+      cloudCursor = { seed, mapWidth, mapHeight, index, start };
+      return clouds;
+    }
+    start = nextStart;
+    index += 1;
   }
+  cloudCursor = { seed, mapWidth, mapHeight, index, start };
   return clouds;
 }

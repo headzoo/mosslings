@@ -114,3 +114,37 @@ export function connectedCellIndices(
   }
   return result;
 }
+
+const TILE_BUCKET = 4;
+
+export function addToBucket<T>(
+  buckets: Map<string, T[]>,
+  x: number,
+  y: number,
+  item: T,
+) {
+  const key = `${Math.floor(x / TILE_BUCKET)},${Math.floor(y / TILE_BUCKET)}`;
+  const list = buckets.get(key);
+  if (list) list.push(item);
+  else buckets.set(key, [item]);
+}
+
+/** Visit items whose bucket can intersect a square of `reach` tiles around x, y. */
+export function eachInReach<T>(
+  buckets: Map<string, T[]>,
+  x: number,
+  y: number,
+  reach: number,
+  visit: (item: T) => void,
+) {
+  const span = Math.ceil(reach / TILE_BUCKET);
+  const bx = Math.floor(x / TILE_BUCKET);
+  const by = Math.floor(y / TILE_BUCKET);
+  for (let ix = bx - span; ix <= bx + span; ix++) {
+    for (let iy = by - span; iy <= by + span; iy++) {
+      const list = buckets.get(`${ix},${iy}`);
+      if (!list) continue;
+      for (const item of list) visit(item);
+    }
+  }
+}
