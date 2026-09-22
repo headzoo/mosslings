@@ -59,6 +59,7 @@ export function MosslingPortrait({
             shown.id,
             elapsedRef.current(),
             shown.health ?? 100,
+            shown.plagueMonths,
           );
           context.imageSmoothingEnabled = true;
           if (backdrop) {

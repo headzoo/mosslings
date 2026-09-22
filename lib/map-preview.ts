@@ -2,7 +2,7 @@ import { foliageAt, type SeasonLook } from "./game-time";
 
 export type { SeasonLook } from "./game-time";
 
-import { plagueShade } from "./god/disease";
+import { plagueHex } from "./god/disease";
 import type { MapCell, MapData } from "./map";
 import { brownBlend, mixHex } from "./vegetation";
 
@@ -37,6 +37,15 @@ export interface MatingRitual {
   role?: "child";
 }
 
+export interface SoccerGame {
+  partnerId: number;
+  /** Game seconds when the kickoff began, shared so the pair kicks in step. */
+  since: number;
+  face: "left" | "right";
+  /** Approach is the walk in. Play is the two months they kick. */
+  phase: "approach" | "play";
+}
+
 export interface PreviewMossling {
   health?: number;
   /** Current alarm level, 0..1; traits remain stable while this state changes. */
@@ -58,6 +67,10 @@ export interface PreviewMossling {
   /** Game seconds when this mossling last finished a successful mating cycle. */
   lastMatedAt?: number;
   ritual?: MatingRitual;
+  /** Set while a pair walks in or spends two months kicking a ball between them. */
+  soccer?: SoccerGame;
+  /** Game seconds when they last survived lightning, meteor, tornado, quake, or fire. */
+  cursedAt?: number;
 }
 
 export type CreatePreviewMosslingsOptions = {
@@ -112,12 +125,15 @@ export function createPreviewMosslings(
 }
 
 const FALLOW_CROP = "#5c4030";
+const DEAD_CROP = "#4a4038";
 
 /** Minimap color for a crop, from fresh green to ripe gold. */
 export function cropColor(
   growth: number,
   look: SeasonLook = SUMMER_LOOK,
+  blight = false,
 ): string {
+  if (blight && growth >= 1) return DEAD_CROP;
   const effective = growth * look.crop;
   let color: string;
   if (effective >= 1) color = "#e0a83a";
@@ -156,6 +172,7 @@ export function cellVisualHash(cell: MapCell): number {
   hash = Math.imul(hash, 2) + (cell.burning ? 1 : 0);
   hash = Math.imul(hash, 2) + (cell.tree ? 1 : 0);
   hash = Math.imul(hash, 8) + growth;
+  hash = Math.imul(hash, 2) + (cell.blight ? 1 : 0);
   hash = Math.imul(hash, 256) + Math.round((cell.recovery ?? 0) * 255);
   hash = Math.imul(hash, 256) + Math.round(cell.moisture * 255);
   hash = Math.imul(hash, 256) + Math.round(cell.fertility * 255);
@@ -201,7 +218,30 @@ function paintCropRows(
   y: number,
   growth: number,
   look: SeasonLook = SUMMER_LOOK,
+  blight = false,
 ) {
+  if (blight && growth >= 1) {
+    context.fillStyle = "#241c18";
+    context.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+    const ash = "#6e6258";
+    const dust = "#5c534c";
+    const dead = [
+      { shift: 0 as const, tips: [ash, dust] as const, foot: "#3f3832" },
+      { shift: 1 as const, tips: [dust, "#4a433c"] as const, foot: "#3a342e" },
+      { shift: 0 as const, tips: [ash, dust] as const, foot: "#3f3832" },
+      { shift: 1 as const, tips: [dust, ash] as const, foot: "#3a342e" },
+    ];
+    for (const [row, caret] of dead.entries())
+      paintCaretRow(
+        context,
+        x,
+        y + row * 2,
+        caret.shift,
+        caret.tips,
+        caret.foot,
+      );
+    return;
+  }
   const stage = cropStage(growth * look.crop);
   if (stage <= 0) return;
   const dot = "#e07a18";
@@ -320,7 +360,8 @@ export function terrainColor(
   if (cell.damage === "burned") return "#3b3027";
   if (cell.damage === "crater") return "#413b37";
   if (cell.tree) return treePaintColor(cell.moisture, "fill", look);
-  if (cell.growth !== undefined) return cropColor(cell.growth, look);
+  if (cell.growth !== undefined)
+    return cropColor(cell.growth, look, cell.blight === true);
   let hash = Math.imul(index + 1, 0x45d9f3b);
   hash = Math.imul(hash ^ (hash >>> 16), 0x45d9f3b);
   const variation = (((hash ^ (hash >>> 16)) >>> 0) % 9) - 4;
@@ -383,15 +424,6 @@ export function mosslingPatternColor(
   return mossling.colors[value % mossling.colors.length];
 }
 
-function scaleHex(hex: string, factor: number) {
-  const value = Number.parseInt(hex.slice(1), 16);
-  const channel = (shift: number) =>
-    Math.round(((value >> shift) & 255) * factor)
-      .toString(16)
-      .padStart(2, "0");
-  return `#${channel(16)}${channel(8)}${channel(0)}`;
-}
-
 export function paintedMosslingColor(
   mossling: PreviewMossling,
   x: number,
@@ -402,7 +434,7 @@ export function paintedMosslingColor(
   const months = mossling.plagueMonths;
   const color = mosslingPatternColor(mossling, x, y);
   if (months === undefined) return color;
-  return scaleHex(color, plagueShade(months));
+  return plagueHex(color, months);
 }
 
 function paintTree(
@@ -647,7 +679,7 @@ export function paintCell(
     !cell.burning &&
     !cell.damage
   )
-    paintCropRows(context, x, y, cell.growth, look);
+    paintCropRows(context, x, y, cell.growth, look, cell.blight === true);
   if (tileSize > 1 && cell.tree) paintTree(context, x, y, cell.moisture, look);
   if (
     tileSize > 1 &&

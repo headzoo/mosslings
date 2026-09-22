@@ -1,8 +1,9 @@
+import { rollCropBlight } from "../../crops";
 import type { MapCell } from "../../map";
 import { connectedCellIndices, effect, ring } from "../shared";
 import type { GodAction, GodContext } from "../types";
 
-function sow(world: GodContext, cell: MapCell) {
+function sow(world: GodContext, cell: MapCell, index: number) {
   world.clearRecovery(cell);
   cell.tree = undefined;
   cell.terrain = "grass";
@@ -13,6 +14,7 @@ function sow(world: GodContext, cell: MapCell) {
   if (cell.growth === undefined) {
     cell.growth = 0;
     cell.moisture = 1;
+    rollCropBlight(cell, world.map.seed, index);
     return true;
   }
   return false;
@@ -48,7 +50,7 @@ export const raze: GodAction = {
             !cell.tree &&
             !cell.burning,
     )) {
-      if (sow(world, world.map.cells[index])) e.hit.add(index);
+      if (sow(world, world.map.cells[index], index)) e.hit.add(index);
     }
   },
   draw(e, painter) {

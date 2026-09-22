@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   advanceCrops,
+  CROP_GROWTH_STEP,
   CROP_MOISTURE_LOSS,
   CROP_WILT_MOISTURE,
+  cropCarriesBlight,
   cropFoodSupply,
   plantStarterFields,
+  rollCropBlight,
 } from "../lib/crops";
 import { MONTH_SECONDS, SEASON_SECONDS } from "../lib/game-time";
 import {
@@ -14,8 +17,12 @@ import {
   WorldEcology,
 } from "../lib/god/ecology";
 import { GodWorld } from "../lib/god/engine";
-import type { MapData } from "../lib/map";
-import type { PreviewMossling } from "../lib/map-preview";
+import type { MapCell, MapData } from "../lib/map";
+import {
+  cropColor,
+  type PreviewMossling,
+  SUMMER_LOOK,
+} from "../lib/map-preview";
 import { type TraitReading, traitLabels } from "../lib/mossling-traits";
 
 function fixture(width = 12, height = 12): MapData {
@@ -284,7 +291,7 @@ test("winter holds a ripe field without feeding or withering, then spring counts
   const held = fixture(3, 3);
   held.cells[4].growth = 0.5;
   held.cells[4].moisture = CROP_WILT_MOISTURE + CROP_MOISTURE_LOSS;
-  assert.equal(advanceCrops(held, 0), 0);
+  assert.equal(advanceCrops(held, 0).withered, 0);
   assert.equal(held.cells[4].growth, 0.5);
   assert.equal(held.cells[4].moisture, CROP_WILT_MOISTURE + CROP_MOISTURE_LOSS);
   held.cells[4].growth = 1;
@@ -342,4 +349,117 @@ test("full health lasts a foodless winter, and a weak Mossling starves", () => {
   weak.advanceTo(SEASON_SECONDS * 3);
   assert.equal(weak.snapshot().resources.mosslings, 0);
   assert.ok(weak.events.some((event) => event.message.includes("starved")));
+});
+
+function bareCell(): MapCell {
+  return {
+    terrain: "grass",
+    elevation: 0.6,
+    moisture: 1,
+    rockiness: 0.2,
+    fertility: 0.5,
+  };
+}
+
+test("one planted carrot tile in a hundred carries blight", () => {
+  for (let index = 0; index < 12 * 12; index++)
+    assert.equal(cropCarriesBlight(7, index), false);
+  let hit = -1;
+  let miss = -1;
+  for (let index = 0; index < 5000; index++) {
+    if (cropCarriesBlight(99, index)) hit = index;
+    else if (miss < 0) miss = index;
+    if (hit >= 0 && miss >= 0) break;
+  }
+  assert.ok(hit >= 0 && miss >= 0);
+  const sick = bareCell();
+  rollCropBlight(sick, 99, hit);
+  assert.equal(sick.blight, true);
+  const clean = bareCell();
+  rollCropBlight(clean, 99, miss);
+  assert.equal(clean.blight, undefined);
+  let hits = 0;
+  for (let index = 0; index < 10_000; index++)
+    if (cropCarriesBlight(99, index)) hits++;
+  assert.ok(hits > 50 && hits < 150);
+});
+
+test("a ripe blight floods the carrot patch and skips food", () => {
+  const map = fixture(3, 3);
+  map.cells[0].growth = 1 - CROP_GROWTH_STEP;
+  map.cells[0].blight = true;
+  map.cells[0].moisture = 1;
+  map.cells[0].light = 1;
+  map.cells[1].growth = 0.2;
+  map.cells[1].moisture = 1;
+  map.cells[1].light = 1;
+  map.cells[2].growth = 1;
+  map.cells[2].moisture = 1;
+  map.cells[2].light = 1;
+  map.cells[3].tree = { health: 100 };
+  map.cells[3].growth = 0.4;
+  map.cells[6].growth = 1;
+  map.cells[6].moisture = 1;
+  map.cells[6].light = 1;
+  assert.equal(cropColor(0.2, SUMMER_LOOK, true), cropColor(0.2, SUMMER_LOOK));
+  const month = advanceCrops(map);
+  assert.equal(map.cells[0].growth, 1);
+  assert.equal(map.cells[0].blight, true);
+  assert.equal(map.cells[1].blight, true);
+  assert.ok((map.cells[1].growth ?? 0) < 1);
+  assert.equal(map.cells[2].blight, true);
+  assert.equal(map.cells[3].blight, undefined);
+  assert.equal(map.cells[6].blight, undefined);
+  assert.equal(map.cells[6].growth, 1);
+  assert.ok(month.blightAt);
+  assert.notEqual(cropColor(1, SUMMER_LOOK, true), cropColor(1, SUMMER_LOOK));
+  assert.equal(
+    cropColor(map.cells[1].growth ?? 0, SUMMER_LOOK, true),
+    cropColor(map.cells[1].growth ?? 0, SUMMER_LOOK),
+  );
+
+  const fed = fixture(1, 2);
+  fed.cells[0].growth = 1;
+  fed.cells[0].blight = true;
+  fed.cells[1].growth = 1;
+  assert.equal(cropFoodSupply(fed), 1);
+});
+
+test("a blight outbreak is bulletined once", () => {
+  const map = fixture(3, 3);
+  map.cells[4].growth = 0;
+  map.cells[4].blight = true;
+  map.cells[4].moisture = 1;
+  map.cells[4].light = 1;
+  map.cells[5].growth = 1;
+  map.cells[5].moisture = 1;
+  map.cells[5].light = 1;
+  const world = new GodWorld(map, []);
+  const tend = () => {
+    world.map.cells[4].moisture = 1;
+    world.map.cells[4].light = 1;
+    world.map.cells[5].moisture = 1;
+    world.map.cells[5].light = 1;
+  };
+  for (let month = 1; month <= 5; month++) {
+    tend();
+    world.advanceTo(month * MONTH_SECONDS);
+  }
+  assert.ok((world.map.cells[4].growth ?? 0) < 1);
+  assert.equal(
+    world.events.some((event) => event.tag === "crop-blight"),
+    false,
+  );
+  tend();
+  world.advanceTo(4 * SEASON_SECONDS);
+  assert.equal(world.map.cells[4].growth, 1);
+  assert.equal(world.map.cells[5].blight, true);
+  const outbreaks = () =>
+    world.events.filter((event) => event.tag === "crop-blight");
+  assert.equal(outbreaks().length, 1);
+  assert.equal(outbreaks()[0]?.x, 1);
+  assert.equal(outbreaks()[0]?.y, 1);
+  tend();
+  world.advanceTo(4 * SEASON_SECONDS + MONTH_SECONDS);
+  assert.equal(outbreaks().length, 1);
 });

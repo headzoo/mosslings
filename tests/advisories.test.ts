@@ -4,6 +4,8 @@ import {
   ADVISORY_REPEAT_MS,
   type AdvisoryMemory,
   type AdvisoryWorld,
+  APPROVAL_HIGH_ABOVE,
+  APPROVAL_LOW_BELOW,
   EMPTY_ADVISORY_MEMORY,
   HEALTH_ADVISORY_BELOW,
   stepAdvisory,
@@ -187,7 +189,7 @@ test("small health drops above the advisory threshold stay quiet", () => {
     resources: { health: 98 },
   });
   assert.equal(show(hungry, opened.memory, 1).kind, null);
-  assert.ok(HEALTH_ADVISORY_BELOW > 98);
+  assert.ok(98 > HEALTH_ADVISORY_BELOW);
 });
 
 test("falling health warns only while Mosslings are hungry", () => {
@@ -278,8 +280,9 @@ test("a warning that cleared shows again as soon as it returns", () => {
   const fed = world({
     events: [{ id: 1, message: "1 Mossling starved." }],
     mosslings: [
-      { id: 1, cellIndex: 0, health: 100, colors: ["#ffe632"], pattern: 0 },
+      { id: 1, cellIndex: 0, health: 60, colors: ["#ffe632"], pattern: 0 },
     ],
+    resources: { health: 60 },
   });
   const recovered = show(fed, first.memory, 1_000);
   assert.equal(recovered.kind, null);
@@ -293,13 +296,13 @@ test("a warning that cleared shows again as soon as it returns", () => {
         {
           id: 1,
           cellIndex: 0,
-          health: 25,
+          health: 60,
           hungry: true,
           colors: ["#ffe632"],
           pattern: 0,
         },
       ],
-      resources: { health: 25 },
+      resources: { health: 60 },
     }),
     recovered.memory,
     2_000,
@@ -389,4 +392,90 @@ test("falling health outranks a food shortage", () => {
     { ...EMPTY_ADVISORY_MEMORY, previousHealth: 90, healthFalling: true },
   );
   assert.equal(withHealth.kind, "health");
+});
+
+function livingAt(health: number, extra?: { hungry?: boolean }) {
+  return world({
+    mosslings: [
+      {
+        id: 1,
+        cellIndex: 0,
+        health,
+        hungry: extra?.hungry,
+        colors: ["#ffe632"],
+        pattern: 0,
+      },
+    ],
+    resources: { health },
+  });
+}
+
+test("opening health of 100 stays quiet", () => {
+  assert.equal(show(livingAt(100)).kind, null);
+});
+
+test("crossing below 40 fires approvalLow once", () => {
+  const opened = show(livingAt(100));
+  const dropped = show(livingAt(APPROVAL_LOW_BELOW - 1), opened.memory, 1);
+  assert.equal(dropped.kind, "approvalLow");
+  assert.equal(
+    show(livingAt(APPROVAL_LOW_BELOW - 1), dropped.memory, 2).kind,
+    null,
+  );
+});
+
+test("health that only meets 40 does not fire the approval story", () => {
+  const opened = show(livingAt(100));
+  assert.equal(show(livingAt(APPROVAL_LOW_BELOW), opened.memory, 1).kind, null);
+});
+
+test("recovering over 80 after a crisis fires approvalHigh once", () => {
+  const opened = show(livingAt(100));
+  const dropped = show(livingAt(35), opened.memory, 1);
+  assert.equal(dropped.kind, "approvalLow");
+  const held = show(livingAt(35), dropped.memory, 2);
+  const recovered = show(livingAt(APPROVAL_HIGH_ABOVE + 1), held.memory, 3);
+  assert.equal(recovered.kind, "approvalHigh");
+  assert.equal(
+    show(livingAt(APPROVAL_HIGH_ABOVE + 1), recovered.memory, 4).kind,
+    null,
+  );
+});
+
+test("health that never fell below 40 does not praise a climb past 80", () => {
+  const opened = show(livingAt(70));
+  assert.equal(opened.kind, null);
+  assert.equal(show(livingAt(85), opened.memory, 1).kind, null);
+});
+
+test("a world that opens already below 40 still praises a climb past 80", () => {
+  const opened = show(livingAt(35));
+  assert.equal(opened.kind, null);
+  assert.equal(show(livingAt(85), opened.memory, 1).kind, "approvalHigh");
+});
+
+test("a held approval story waits until it can show", () => {
+  const opened = show(livingAt(100));
+  const held = show(livingAt(35), opened.memory, 1, false);
+  assert.equal(held.kind, "approvalLow");
+  assert.equal(held.memory.pendingApprovalLow, true);
+  const shown = show(livingAt(35), held.memory, 2, true);
+  assert.equal(shown.kind, "approvalLow");
+  assert.equal(shown.memory.pendingApprovalLow, false);
+  assert.equal(show(livingAt(35), shown.memory, 3).kind, null);
+});
+
+test("declining approval outranks the falling-health warning", () => {
+  const opened = show(livingAt(100));
+  const dropped = show(livingAt(35, { hungry: true }), opened.memory, 1);
+  assert.equal(dropped.kind, "approvalLow");
+});
+
+test("an empty world does not flash approval as Mosslings die out", () => {
+  const opened = show(livingAt(100));
+  const empty = world({
+    mosslings: [],
+    resources: { health: 0, mosslings: 0 },
+  });
+  assert.equal(show(empty, opened.memory, 1).kind, null);
 });

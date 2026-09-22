@@ -18,10 +18,17 @@ const LEAVES = [0x3d9a34, 0x54a32e, 0x2f7a28] as const;
 const CARROT = 0xe87820;
 const CARROT_TIP = 0xc44818;
 const STUBBLE = 0x8a5a2c;
+const DEAD_STUBBLE = 0x6b5344;
 const SNOW = 0xf7fbff;
 const SNOW_BRIGHT = 0xffffff;
 const SNOW_SHADE = 0xd5e4ee;
-const PLANT_COLORS = new Set<number>([...LEAVES, CARROT, CARROT_TIP, STUBBLE]);
+const PLANT_COLORS = new Set<number>([
+  ...LEAVES,
+  CARROT,
+  CARROT_TIP,
+  STUBBLE,
+  DEAD_STUBBLE,
+]);
 
 function lookSteps(look: SeasonLook) {
   const step = (value: number) => Math.round(value * 20);
@@ -157,6 +164,19 @@ export function waterRipple(y: number, size: number) {
   return y % span === 1;
 }
 
+/** Dark trench and lit lip so an empty autumn or winter field still reads as plowed. */
+function plowPixel(index: number, x: number, y: number, size: number) {
+  const band = size / 3;
+  const row = Math.min(2, Math.floor(y / band));
+  const local = y - row * band;
+  const wobble = (hashAt(index, Math.floor(x / 8), 4) % 3) - 1;
+  const dist = local - band * 0.55 - wobble * 0.2;
+  const soil = soilColor(index, x, y);
+  if (dist >= -1.5 && dist < 1) return scalePacked(soil, 0.48);
+  if (dist >= 1 && dist < 2) return scalePacked(soil, 1.08);
+  return soil;
+}
+
 function cropPixel(
   cell: MapCell,
   index: number,
@@ -165,7 +185,12 @@ function cropPixel(
   size: number,
   look: SeasonLook,
 ) {
-  const growth = Math.max(0, Math.min(1, (cell.growth ?? 0) * look.crop));
+  const dead = cell.blight === true && (cell.growth ?? 0) >= 1;
+  if (!dead && (look.autumn > 0 || look.crop <= 0))
+    return plowPixel(index, x, y, size);
+  const growth = dead
+    ? 1
+    : Math.max(0, Math.min(1, (cell.growth ?? 0) * look.crop));
   const band = size / 3;
   const row = Math.min(2, Math.floor(y / band));
   const local = y - row * band;
@@ -184,13 +209,16 @@ function cropPixel(
     local >= center &&
     local < center + carrotHeight &&
     dx <= 1
-  )
+  ) {
+    if (dead) return soilColor(index, x, y);
     return local >= center + carrotHeight - 1 ? CARROT_TIP : CARROT;
+  }
   if (
     local >= leafTop &&
     local < center &&
     dx <= (local < center - 1 ? 2 : 1)
   ) {
+    if (dead) return DEAD_STUBBLE;
     if (growth < 0.15) return STUBBLE;
     return LEAVES[hashAt(index, x, y) % LEAVES.length] ?? LEAVES[0];
   }

@@ -14,7 +14,8 @@ export type DisasterKind =
   | "tornado"
   | "quake"
   | "lightning"
-  | "meteor";
+  | "meteor"
+  | "blight";
 
 export type NewsKind = DisasterKind | AdvisoryKind;
 
@@ -29,6 +30,8 @@ export type NewsFlash = {
 
 function isAdvisory(kind: NewsKind): kind is AdvisoryKind {
   return (
+    kind === "approvalLow" ||
+    kind === "approvalHigh" ||
     kind === "starve" ||
     kind === "wither" ||
     kind === "dry" ||
@@ -72,6 +75,12 @@ const newsItems: Record<
     line: (region) =>
       `Something fell from the sky in ${region}. Some Mosslings may have been flattened.`,
   },
+  blight: {
+    image: "/mosslings/lore/news/crops.png",
+    alt: "A worried moss creature sits beside rows of dead carrots.",
+    line: (region) =>
+      `A blight is in the carrots in ${region}. The ripe rows are dying.`,
+  },
 };
 
 const advisoryItems: Record<
@@ -102,6 +111,16 @@ const advisoryItems: Record<
     image: "/mosslings/lore/news/health.png",
     alt: "A tired moss creature droops in the grass.",
     line: "Mossling health keeps falling. They need more ripe carrots. Use Carrots, and bring rain if the garden is dry.",
+  },
+  approvalLow: {
+    image: "/mosslings/lore/news/health.png",
+    alt: "A tired moss creature droops in the grass.",
+    line: "God's approval rating is declining. Praryers aren't being answered. Sick aren't being cured.",
+  },
+  approvalHigh: {
+    image: "/mosslings/lore/peaceful.png",
+    alt: "A content moss creature sits in deep moss beside a butterfly.",
+    line: "God's approval rating is sky-high! They answer our prarys, and the sick are being cured.",
   },
   shortage: {
     image: "/mosslings/lore/news/hunger.png",

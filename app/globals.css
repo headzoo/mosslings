@@ -188,7 +188,7 @@ button:hover {
   width: max-content;
   justify-self: end;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 8px;
 }
 .play-controls button {
@@ -196,6 +196,9 @@ button:hover {
   display: grid;
   place-items: center;
   padding: 8px;
+}
+.play-controls button:disabled {
+  opacity: 0.45;
 }
 .play-controls button[aria-pressed="true"] {
   border-color: #e5da57;
@@ -1174,6 +1177,15 @@ button:hover {
   border-color: #8ea86f;
   color: #fff4bb;
 }
+.inspector-shot {
+  display: grid;
+  place-items: center;
+  padding: 4px 8px;
+}
+.inspector-shot .pixel-icon {
+  width: 22px;
+  height: 22px;
+}
 .mossling-introduction,
 .terrain-introduction {
   display: flex;
@@ -1965,4 +1977,98 @@ button:hover {
   .crop-intro-copy {
     width: min(320px, calc(100% - 32px));
   }
+}
+
+.screenshot-modal {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(720px, calc(100vw - 32px));
+  max-height: min(860px, calc(100dvh - 32px));
+  padding: 14px;
+  overflow: auto;
+  color: var(--foreground);
+}
+.screenshot-modal[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.screenshot-modal::backdrop {
+  background: #071510c9;
+}
+.screenshot-preview {
+  display: block;
+  width: 100%;
+  max-height: min(68dvh, 640px);
+  object-fit: contain;
+  image-rendering: pixelated;
+  background: #071510;
+  border: 2px solid #172c26;
+}
+.screenshot-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.screenshot-download,
+.screenshot-x,
+.screenshot-open {
+  padding: 8px 14px;
+  border: 1px solid #61724b;
+  background: #142018;
+  color: #e6eecb;
+  font-size: 14px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.screenshot-download:hover,
+.screenshot-x:hover,
+.screenshot-open:hover {
+  border-color: #8ea86f;
+  color: #fff4bb;
+}
+.screenshot-x {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  padding: 8px;
+}
+.screenshot-x:disabled {
+  opacity: 0.45;
+}
+.screenshot-x-mark {
+  width: 16px;
+  height: 16px;
+}
+.screenshot-status {
+  margin: 0;
+  color: #e7e27e;
+  font-size: 14px;
+}
+.screenshot-open {
+  align-self: flex-end;
+}
+.shot-page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+}
+.shot-page img {
+  max-width: min(960px, 100%);
+  max-height: 72dvh;
+  object-fit: contain;
+  image-rendering: pixelated;
+  border: 8px solid #172c26;
+  background: #071510;
+}
+.shot-page p {
+  margin: 0;
+}
+.shot-page a {
+  color: #e6eecb;
 }

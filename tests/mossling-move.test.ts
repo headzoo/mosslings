@@ -52,11 +52,17 @@ test("moveMossling rejects invalid destinations", () => {
   map.cells[15].tree = { health: 100 };
   map.cells[16].burning = true;
   const world = new GodWorld(map, [mossling(12), mossling(0, 2)]);
-  assert.match(world.moveMossling(1, 3, 2), /water/);
-  assert.match(world.moveMossling(1, 4, 2), /stone/);
-  assert.match(world.moveMossling(1, 0, 3), /tree/);
-  assert.match(world.moveMossling(1, 1, 3), /fire/);
-  assert.match(world.moveMossling(1, 0, 0), /occupied/);
+  for (const [x, y, pattern] of [
+    [3, 2, /water/],
+    [4, 2, /stone/],
+    [0, 3, /tree/],
+    [1, 3, /fire/],
+    [0, 0, /occupied/],
+  ] as const) {
+    const error = world.moveMossling(1, x, y);
+    assert.ok(error);
+    assert.match(error, pattern);
+  }
 });
 
 test("moveMossling rejects dead mosslings and same-tile no-ops", () => {
@@ -111,8 +117,14 @@ test("cloneMossling rejects invalid destinations and dead sources", () => {
     mossling(12),
     mossling(0, 2, { health: 0 }),
   ]);
-  assert.match(world.cloneMossling(1, 3, 2), /water/);
-  assert.match(world.cloneMossling(1, 0, 0), /occupied/);
+  for (const [x, y, pattern] of [
+    [3, 2, /water/],
+    [0, 0, /occupied/],
+  ] as const) {
+    const error = world.cloneMossling(1, x, y);
+    assert.ok(error);
+    assert.match(error, pattern);
+  }
   assert.equal(world.cloneMossling(2, 3, 3), "That Mossling is gone.");
   assert.equal(world.mosslings.length, 2);
 });

@@ -44,6 +44,8 @@ function portraitFor(
   }
   if (cell.growth !== undefined) {
     const growth = (cell.growth ?? 0) * look.crop;
+    if (cell.blight && (cell.growth ?? 0) >= 1)
+      return { name: "cropRipe", label: "Pixel-art picture of dead carrots" };
     if (growth >= 5 / 6)
       return { name: "cropRipe", label: "Pixel-art picture of ripe carrots" };
     if (growth < 1 / 6)

@@ -6,7 +6,8 @@ import {
   catchRange,
   chebyshev,
   plagueHeading,
-  plagueShade,
+  plagueHex,
+  plagueTint,
 } from "../lib/god/disease";
 import { GodWorld } from "../lib/god/engine";
 import type { MapData } from "../lib/map";
@@ -77,15 +78,6 @@ function seal(map: MapData, index: number, occupied: Set<number>) {
     map.cells[next].terrain = "rock";
   }
 }
-function scale(hex: string, factor: number) {
-  const value = Number.parseInt(hex.slice(1), 16);
-  const channel = (shift: number) =>
-    Math.round(((value >> shift) & 255) * factor)
-      .toString(16)
-      .padStart(2, "0");
-  return `#${channel(16)}${channel(8)}${channel(0)}`;
-}
-
 test("plague heading follows sociability, cowardice, and a curiosity roll", () => {
   assert.equal(plagueHeading(0.8, 0.2, 0, 0.99), true);
   assert.equal(plagueHeading(0.2, 0.8, 0.9, 0), true);
@@ -170,7 +162,7 @@ test("toughness sets a 1, 2, or 3 tile catch range and does not reset an older i
   assert.equal(months.get(900), undefined);
 });
 
-test("colors dim on infection, keep fading, turn black at 6, and leave at 9", () => {
+test("colors go puke-green on infection, go greener as they sicken, turn black at 6, and leave at 9", () => {
   const world = new GodWorld(fixture(), [mossling(20, 20, 4)]);
   provisionCrops(world.map, 1, 10);
   world.cast("disease", 20, 20);
@@ -178,28 +170,29 @@ test("colors dim on infection, keep fading, turn black at 6, and leave at 9", ()
   const fresh = look();
   assert.ok(fresh);
   assert.equal(fresh.plagueMonths, 0);
-  assert.ok(plagueShade(0) < 1);
+  assert.ok(plagueTint(0) > 0);
+  assert.ok(plagueTint(0) < 1);
   assert.equal(
     paintedMosslingColor(fresh, 0, 0),
-    scale(fresh.colors[0], plagueShade(0)),
+    plagueHex(fresh.colors[0], 0),
   );
   world.advanceTo(MONTH_SECONDS * 2);
   const early = look();
   assert.ok(early);
   assert.equal(early.plagueMonths, 2);
-  assert.ok(plagueShade(2) < plagueShade(0));
+  assert.ok(plagueTint(2) > plagueTint(0));
   assert.equal(
     paintedMosslingColor(early, 0, 0),
-    scale(early.colors[0], plagueShade(2)),
+    plagueHex(early.colors[0], 2),
   );
   world.advanceTo(MONTH_SECONDS * 3);
-  const dimmed = look();
-  assert.ok(dimmed);
-  assert.equal(dimmed.plagueMonths, 3);
-  assert.ok(plagueShade(3) < plagueShade(2));
+  const sicker = look();
+  assert.ok(sicker);
+  assert.equal(sicker.plagueMonths, 3);
+  assert.ok(plagueTint(3) > plagueTint(2));
   assert.equal(
-    paintedMosslingColor(dimmed, 0, 0),
-    scale(dimmed.colors[0], plagueShade(3)),
+    paintedMosslingColor(sicker, 0, 0),
+    plagueHex(sicker.colors[0], 3),
   );
   world.advanceTo(MONTH_SECONDS * 6);
   const dead = look();

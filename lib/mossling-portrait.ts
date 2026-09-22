@@ -1,4 +1,4 @@
-import { plagueShade } from "./god/disease";
+import { plagueBounceScale, plagueRgb } from "./god/disease";
 import { mosslingPatternColor, type PreviewMossling } from "./map-preview";
 import { BOUNCE_SECONDS } from "./mossling-detail";
 
@@ -34,10 +34,12 @@ export function portraitBounceFrame(
   id: number,
   elapsed: number,
   health = 100,
+  plagueMonths?: number,
 ): number {
   if (health <= 0) return 0;
+  const t = elapsed / plagueBounceScale(plagueMonths);
   const span = PORTRAIT_BOUNCE_SECONDS / PORTRAIT_FRAME_COUNT;
-  const shifted = elapsed + id * span;
+  const shifted = t + id * span;
   const wrapped =
     ((shifted % PORTRAIT_BOUNCE_SECONDS) + PORTRAIT_BOUNCE_SECONDS) %
     PORTRAIT_BOUNCE_SECONDS;
@@ -172,10 +174,12 @@ export function skinPortrait(
       );
       const color = palette.get(mosslingPatternColor(mossling, px, py));
       if (!color) continue;
-      const shade =
-        Math.min(1.25, brightness / 155) *
-        (months === undefined ? 1 : plagueShade(months));
-      const tinted = color.map((channel) => Math.round(channel * shade));
+      const body =
+        months === undefined
+          ? color
+          : plagueRgb(color[0] ?? 0, color[1] ?? 0, color[2] ?? 0, months);
+      const shade = Math.min(1.25, brightness / 155);
+      const tinted = body.map((channel) => Math.round(channel * shade));
       for (let channel = 0; channel < 3; channel++)
         result.data[offset + channel] = tinted[channel] ?? 0;
     }

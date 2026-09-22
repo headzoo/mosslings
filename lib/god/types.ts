@@ -80,7 +80,7 @@ export interface GodAction {
   finish?: (effect: GodEffect, context: GodContext) => void;
   threats?: (effect: GodEffect, context: GodContext) => DisasterThreat[];
 }
-export type WorldEventTag = "player-crop-planted";
+export type WorldEventTag = "player-crop-planted" | "crop-blight";
 
 export interface WorldEvent {
   id: number;
@@ -88,4 +88,6 @@ export interface WorldEvent {
   year: number;
   season: Season;
   tag?: WorldEventTag;
+  x?: number;
+  y?: number;
 }

@@ -26,7 +26,12 @@ import {
 import type { MapCell, MapData } from "@/lib/map";
 import { type Camera, getCamera, zoomAtPoint } from "@/lib/map-camera";
 import type { PreviewMossling } from "@/lib/map-preview";
-import { detailMode } from "@/lib/mossling-detail";
+import {
+  mapToolFromKeyboard,
+  shouldIgnoreMapToolShortcut,
+} from "@/lib/map-tool-shortcuts";
+import { detailMode, SPRITE_ZOOM } from "@/lib/mossling-detail";
+import { canvasToPng, captureViewport } from "@/lib/screenshot";
 import {
   clusterSpecies,
   nearestMember,
@@ -35,12 +40,15 @@ import {
 } from "@/lib/species";
 import { speciesName } from "@/lib/species-name";
 import { terrainDetailActive } from "@/lib/terrain-detail";
+import { CoughBubbles } from "./CoughBubbles";
 import { CropIntro } from "./CropIntro";
+import { CurseBubbles } from "./CurseBubbles";
 import { type DisasterId, isDisasterPower } from "./DestroyedStatIcon";
 import { GameMap, Minimap } from "./GameMap";
 import { GodControls } from "./GodControls";
 import { GodEffects } from "./GodEffects";
 import { Health } from "./Health";
+import { Kites } from "./Kites";
 import {
   ExtinctionModal,
   LoreBoard,
@@ -52,8 +60,10 @@ import { MosslingDetail } from "./MosslingDetail";
 import { type IntroPhase, MosslingIntro } from "./MosslingIntro";
 import { MoveIntro } from "./MoveIntro";
 import { Pollinators } from "./Pollinators";
+import { ScreenshotModal } from "./ScreenshotModal";
 import { SeasonDim } from "./SeasonDim";
 import { SkyClouds } from "./SkyClouds";
+import { SoccerBall } from "./SoccerBall";
 import { SpeciesList } from "./SpeciesList";
 import { TerrainDetail } from "./TerrainDetail";
 import { TileInspector } from "./TileInspector";
@@ -167,6 +177,8 @@ export function GameScreen({
   const godRailRef = useRef<HTMLElement | null>(null);
   const zoomControlsRef = useRef<HTMLFieldSetElement | null>(null);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
+  const [mapShot, setMapShot] = useState<Blob | null>(null);
+  const [mapShotProblem, setMapShotProblem] = useState<string | null>(null);
   const [tileSize, setTileSize] = useState(DEFAULT_TILE_SIZE);
   const [center, setCenter] = useState(DEFAULT_CENTER);
   const [mapTool, setMapTool] = useState<MapTool>("pointer");
@@ -184,6 +196,7 @@ export function GameScreen({
   const extinctionShown = useRef(false);
   const previousMosslings = useRef<number | null>(null);
   const flashId = useRef(0);
+  const blightSeen = useRef(-1);
   const advisoryMemory = useRef<AdvisoryMemory>(EMPTY_ADVISORY_MEMORY);
   const newsUntil = useRef(0);
   useEffect(() => {
@@ -209,6 +222,27 @@ export function GameScreen({
       setFlash({ id: ++flashId.current, kind: step.kind });
     }
   }, [map, mosslings, resources, events]);
+  useEffect(() => {
+    if (!map) return;
+    const outbreak = events.find((event) => event.tag === "crop-blight");
+    if (
+      !outbreak ||
+      outbreak.id === blightSeen.current ||
+      outbreak.x === undefined ||
+      outbreak.y === undefined
+    )
+      return;
+    blightSeen.current = outbreak.id;
+    newsUntil.current = performance.now() + NEWS_MS;
+    setFlash({
+      id: ++flashId.current,
+      kind: "blight",
+      x: outbreak.x,
+      y: outbreak.y,
+      mapWidth: map.width,
+      mapHeight: map.height,
+    });
+  }, [events, map]);
   useEffect(() => {
     const count = resources?.mosslings;
     if (count == null) return;
@@ -298,16 +332,6 @@ export function GameScreen({
     }
   }, [introActive, cropIntroOpen, mapTool, tileSize, stopPan]);
   useEffect(() => {
-    if (
-      introActive ||
-      cropIntroOpen ||
-      (mapTool === "zoom-in" && tileSize >= 32) ||
-      (mapTool === "zoom-out" && tileSize <= DEFAULT_TILE_SIZE)
-    ) {
-      setMapTool("pointer");
-    }
-  }, [introActive, cropIntroOpen, mapTool, tileSize]);
-  useEffect(() => {
     if (mapTool === "pointer") return;
     const exit = (event: PointerEvent) => {
       const board = viewportRef.current;
@@ -324,6 +348,18 @@ export function GameScreen({
     window.addEventListener("pointerdown", exit);
     return () => window.removeEventListener("pointerdown", exit);
   }, [mapTool, stopPan]);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (tutorialPaused || document.querySelector("dialog[open]")) return;
+      if (shouldIgnoreMapToolShortcut(event)) return;
+      const tool = mapToolFromKeyboard(event);
+      if (!tool) return;
+      event.preventDefault();
+      selectMapTool(tool);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [tutorialPaused, selectMapTool]);
   useEffect(() => {
     if (!map) return;
     const introZoomed =
@@ -635,6 +671,29 @@ export function GameScreen({
           onSkip={gameTime.skipToNextSpring}
           onFastForward={gameTime.fastForward}
           onRestoreWelcome={onRestoreWelcome}
+          onScreenshot={
+            map
+              ? () => {
+                  const board = viewportRef.current;
+                  if (!board) return;
+                  try {
+                    const canvas = captureViewport(board);
+                    void canvasToPng(canvas)
+                      .then((blob) => {
+                        setMapShotProblem(null);
+                        setMapShot(blob);
+                      })
+                      .catch(() => {
+                        setMapShot(null);
+                        setMapShotProblem("The map couldn't be captured.");
+                      });
+                  } catch {
+                    setMapShot(null);
+                    setMapShotProblem("The map couldn't be captured.");
+                  }
+                }
+              : undefined
+          }
         />
       </header>
       <div className="game-body">
@@ -919,6 +978,18 @@ export function GameScreen({
                 subscribeFrame={subscribeFrame}
               />
             )}
+            {map && camera && tileSize >= SPRITE_ZOOM && (
+              <Kites
+                map={map}
+                mosslings={mosslings}
+                cameraRef={cameraRef}
+                tileSize={tileSize}
+                width={viewport.width}
+                height={viewport.height}
+                elapsed={gameTime.getElapsed}
+                subscribeFrame={subscribeFrame}
+              />
+            )}
             {map &&
               camera &&
               mosslings.length > 0 &&
@@ -967,6 +1038,41 @@ export function GameScreen({
               <MatingHearts
                 map={map}
                 mosslings={mosslings}
+                cameraRef={cameraRef}
+                tileSize={tileSize}
+                width={viewport.width}
+                height={viewport.height}
+                elapsed={gameTime.getElapsed}
+                subscribeFrame={subscribeFrame}
+              />
+            )}
+            {map && camera && (
+              <SoccerBall
+                map={map}
+                mosslings={mosslings}
+                cameraRef={cameraRef}
+                tileSize={tileSize}
+                width={viewport.width}
+                height={viewport.height}
+                elapsed={gameTime.getElapsed}
+                subscribeFrame={subscribeFrame}
+              />
+            )}
+            {map && camera && (
+              <CoughBubbles
+                map={map}
+                mosslings={mosslings}
+                cameraRef={cameraRef}
+                tileSize={tileSize}
+                width={viewport.width}
+                height={viewport.height}
+                elapsed={gameTime.getElapsed}
+                subscribeFrame={subscribeFrame}
+              />
+            )}
+            {engine && camera && (
+              <CurseBubbles
+                engine={engine}
                 cameraRef={cameraRef}
                 tileSize={tileSize}
                 width={viewport.width}
@@ -1193,6 +1299,18 @@ export function GameScreen({
           phase="powers"
           onContinue={onIntroContinue}
           highlightRef={godRailRef}
+        />
+      )}
+      {(mapShot || mapShotProblem) && (
+        <ScreenshotModal
+          blob={mapShot ?? undefined}
+          filename="mosslings.png"
+          kind="map"
+          problem={mapShotProblem ?? undefined}
+          onDismiss={() => {
+            setMapShot(null);
+            setMapShotProblem(null);
+          }}
         />
       )}
     </main>

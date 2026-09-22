@@ -32,6 +32,96 @@ export function appetite(traits: readonly TraitReading[] | undefined): number {
   return 0.55 + ((metabolism + drive) / 200) * 0.9;
 }
 
+/** Salted so the seed-7 fixtures used by crop tests stay healthy. */
+const BLIGHT_SALT = 0xb;
+
+export type CropAdvance = {
+  withered: number;
+  /** Tile where a blight outbreak started this month. */
+  blightAt: { x: number; y: number } | null;
+};
+
+/** About one planted carrot tile in a hundred carries a hidden blight. */
+export function cropCarriesBlight(seed: number, index: number): boolean {
+  let hash = Math.imul((seed ^ BLIGHT_SALT) >>> 0, (index + 1) | 0);
+  hash = Math.imul(hash ^ (hash >>> 16), 0x7feb352d);
+  hash ^= hash >>> 15;
+  return (hash >>> 0) % 100 === 0;
+}
+
+/** Mark a newly planted carrot, or clear a blight left on this tile. */
+export function rollCropBlight(cell: MapCell, seed: number, index: number) {
+  if (cropCarriesBlight(seed, index)) cell.blight = true;
+  else delete cell.blight;
+}
+
+function isCarrot(cell: MapCell | undefined): boolean {
+  return (
+    !!cell &&
+    cell.growth !== undefined &&
+    !cell.burning &&
+    !cell.damage &&
+    !cell.tree
+  );
+}
+
+function ripeBlighted(cell: MapCell): boolean {
+  return cell.blight === true && (cell.growth ?? 0) >= 1;
+}
+
+function hasRipeBlightNeighbor(map: MapData, index: number): boolean {
+  const x = index % map.width;
+  const y = Math.floor(index / map.width);
+  for (const [dx, dy] of NEIGHBORS) {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (nx < 0 || ny < 0 || nx >= map.width || ny >= map.height) continue;
+    const neighbor = map.cells[ny * map.width + nx];
+    if (neighbor && isCarrot(neighbor) && ripeBlighted(neighbor)) return true;
+  }
+  return false;
+}
+
+/**
+ * Ripe blighted carrots infect every orthogonally connected carrot.
+ * Unripe tiles in that patch carry the blight and pass it on, but they
+ * still look healthy until they themselves are fully ripe.
+ * Returns the first ripe tile that infected a neighbor.
+ */
+function spreadCropBlight(map: MapData): { x: number; y: number } | null {
+  const queue: number[] = [];
+  const seen = new Set<number>();
+  for (let index = 0; index < map.cells.length; index++) {
+    const cell = map.cells[index];
+    if (!cell || !isCarrot(cell) || !ripeBlighted(cell)) continue;
+    queue.push(index);
+    seen.add(index);
+  }
+  let origin: { x: number; y: number } | null = null;
+  let head = 0;
+  while (head < queue.length) {
+    const index = queue[head++];
+    const x = index % map.width;
+    const y = Math.floor(index / map.width);
+    for (const [dx, dy] of NEIGHBORS) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= map.width || ny >= map.height) continue;
+      const next = ny * map.width + nx;
+      if (seen.has(next)) continue;
+      const neighbor = map.cells[next];
+      if (!neighbor || !isCarrot(neighbor)) continue;
+      seen.add(next);
+      if (!neighbor.blight) {
+        neighbor.blight = true;
+        if (!origin) origin = { x, y };
+      }
+      queue.push(next);
+    }
+  }
+  return origin;
+}
+
 /** Food supply from crop tiles, scaled by seasonal stand height. */
 export function cropFoodSupply(map: MapData, cropCover = 1): number {
   if (cropCover <= 0) return 0;
@@ -39,6 +129,7 @@ export function cropFoodSupply(map: MapData, cropCover = 1): number {
   for (const cell of map.cells) {
     if (cell.growth === undefined || cell.burning || cell.damage || cell.tree)
       continue;
+    if (ripeBlighted(cell)) continue;
     supply += Math.min(1, cell.growth) * cropCover;
   }
   return supply;
@@ -47,32 +138,48 @@ export function cropFoodSupply(map: MapData, cropCover = 1): number {
 /**
  * Ripen crops that are both wet and lit, and clear those that have gone too dry.
  * Dormant seasons hold every field as it is: no growth, no wilt, and no food.
- * Returns how many died.
+ * A blighted carrot that reaches full ripeness infects the carrot patch beside it.
  */
-export function advanceCrops(map: MapData, cropCover = 1): number {
-  if (cropCover <= 0) return 0;
+export function advanceCrops(map: MapData, cropCover = 1): CropAdvance {
+  if (cropCover <= 0) return { withered: 0, blightAt: null };
   let withered = 0;
-  for (const cell of map.cells) {
-    if (cell.growth === undefined || cell.burning || cell.damage || cell.tree)
-      continue;
+  let ripenedAt: { x: number; y: number } | null = null;
+  for (let index = 0; index < map.cells.length; index++) {
+    const cell = map.cells[index];
+    if (!cell || !isCarrot(cell)) continue;
+    let growth = cell.growth ?? 0;
     cell.moisture = Math.max(0, cell.moisture - CROP_MOISTURE_LOSS);
     const light = Math.max(0, (cell.light ?? 0) - CROP_LIGHT_LOSS);
     cell.light = light < 1e-6 ? undefined : light;
     if (cell.moisture <= CROP_WILT_MOISTURE) {
       cell.growth = undefined;
+      delete cell.blight;
       withered++;
       continue;
     }
     if (
       cell.moisture < CROP_GROW_MOISTURE ||
       (cell.light ?? 0) < CROP_GROW_LIGHT ||
-      cell.growth >= 1
+      growth >= 1
     )
       continue;
-    cell.growth = Math.min(1, cell.growth + CROP_GROWTH_STEP);
-    if (cell.growth > 1 - 1e-6) cell.growth = 1;
+    growth = Math.min(1, growth + CROP_GROWTH_STEP);
+    if (growth > 1 - 1e-6) growth = 1;
+    cell.growth = growth;
+    if (
+      cell.blight &&
+      growth >= 1 &&
+      !ripenedAt &&
+      !hasRipeBlightNeighbor(map, index)
+    ) {
+      ripenedAt = {
+        x: index % map.width,
+        y: Math.floor(index / map.width),
+      };
+    }
   }
-  return withered;
+  const spreadAt = spreadCropBlight(map);
+  return { withered, blightAt: spreadAt ?? ripenedAt };
 }
 
 /** Keep `count` ripe tiles wet through `months` month-ticks. */
@@ -101,12 +208,13 @@ export function provisionCrops(
   return planted;
 }
 
-function plant(cell: MapCell) {
+function plant(cell: MapCell, seed: number, index: number) {
   cell.terrain = "grass";
   cell.growth = 1;
   cell.moisture = 1;
   cell.damage = undefined;
   cell.burning = false;
+  rollCropBlight(cell, seed, index);
 }
 
 /**
@@ -214,7 +322,7 @@ export function plantStarterFields(
 
   for (const index of chosen) {
     const cell = map.cells[index];
-    if (cell) plant(cell);
+    if (cell) plant(cell, map.seed, index);
   }
   return chosen.length;
 }

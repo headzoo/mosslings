@@ -9,7 +9,15 @@ export const ADVISORY_REPEAT_MS = 40_000;
 /** Average health must fall below this before the health bulletin appears. */
 export const HEALTH_ADVISORY_BELOW = 75;
 
+/** Average health must cross below this before the declining-approval story. */
+export const APPROVAL_LOW_BELOW = 40;
+
+/** Average health must climb above this after a crisis for the recovery story. */
+export const APPROVAL_HIGH_ABOVE = 80;
+
 export type AdvisoryKind =
+  | "approvalLow"
+  | "approvalHigh"
   | "starve"
   | "wither"
   | "dry"
@@ -18,6 +26,8 @@ export type AdvisoryKind =
   | "shortage";
 
 const ADVISORY_KINDS: readonly AdvisoryKind[] = [
+  "approvalLow",
+  "approvalHigh",
   "starve",
   "wither",
   "dry",
@@ -34,6 +44,10 @@ export type AdvisoryMemory = {
   starve: boolean;
   wither: boolean;
   healthFalling: boolean;
+  /** Latches when average health is below 40 so recovery can fire later. */
+  healthWasCritical: boolean;
+  pendingApprovalLow: boolean;
+  pendingApprovalHigh: boolean;
 };
 
 export const EMPTY_ADVISORY_MEMORY: AdvisoryMemory = {
@@ -43,6 +57,9 @@ export const EMPTY_ADVISORY_MEMORY: AdvisoryMemory = {
   starve: false,
   wither: false,
   healthFalling: false,
+  healthWasCritical: false,
+  pendingApprovalLow: false,
+  pendingApprovalHigh: false,
 };
 
 export type AdvisoryWorld = {
@@ -87,6 +104,7 @@ export function stepAdvisory(
     (mossling) => (mossling.health ?? 100) > 0 && mossling.hungry,
   );
   const health = world.resources.health;
+  const living = world.resources.mosslings > 0;
   let healthFalling = memory.healthFalling;
   if (
     hungry &&
@@ -103,6 +121,31 @@ export function stepAdvisory(
   ) {
     healthFalling = false;
   }
+  let healthWasCritical = memory.healthWasCritical;
+  let pendingApprovalLow = memory.pendingApprovalLow;
+  let pendingApprovalHigh = memory.pendingApprovalHigh;
+  if (!living) {
+    pendingApprovalLow = false;
+    pendingApprovalHigh = false;
+  } else if (memory.previousHealth !== null) {
+    const previous = memory.previousHealth;
+    if (previous >= APPROVAL_LOW_BELOW && health < APPROVAL_LOW_BELOW) {
+      pendingApprovalLow = true;
+      pendingApprovalHigh = false;
+    }
+    if (
+      healthWasCritical &&
+      previous <= APPROVAL_HIGH_ABOVE &&
+      health > APPROVAL_HIGH_ABOVE
+    ) {
+      pendingApprovalHigh = true;
+      pendingApprovalLow = false;
+      healthWasCritical = false;
+    }
+    if (health < APPROVAL_LOW_BELOW) healthWasCritical = true;
+  } else if (health < APPROVAL_LOW_BELOW) {
+    healthWasCritical = true;
+  }
   const shortage =
     world.resources.mosslings > 0 &&
     world.resources.food < world.resources.mosslings;
@@ -111,6 +154,8 @@ export function stepAdvisory(
   if (crops.length === 0 || parched.length === 0) wither = false;
 
   const active: AdvisoryKind[] = [];
+  if (pendingApprovalLow) active.push("approvalLow");
+  if (pendingApprovalHigh) active.push("approvalHigh");
   if (starve || starveEvent) active.push("starve");
   if (wither || witherEvent) active.push("wither");
   if (dry) active.push("dry");
@@ -132,6 +177,8 @@ export function stepAdvisory(
     if (at !== undefined) lastShown[name] = at;
   }
   if (commit && kind) lastShown[kind] = now;
+  if (commit && kind === "approvalLow") pendingApprovalLow = false;
+  if (commit && kind === "approvalHigh") pendingApprovalHigh = false;
 
   return {
     kind,
@@ -145,6 +192,9 @@ export function stepAdvisory(
       starve,
       wither,
       healthFalling,
+      healthWasCritical,
+      pendingApprovalLow,
+      pendingApprovalHigh,
     },
   };
 }

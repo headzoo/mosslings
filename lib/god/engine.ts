@@ -1,4 +1,14 @@
 import { advanceCrops, appetite, cropFoodSupply } from "../crops";
+import { markCurse } from "../curse";
+import {
+  FIELD_REACH,
+  type FieldPoint,
+  farmingSeason,
+  fieldStep,
+  isCarrotTile,
+  nearestCarrot,
+} from "../field-work";
+import { touchesFire } from "../fire-sprite";
 import {
   foliageAt,
   type GameDate,
@@ -13,7 +23,14 @@ import {
   type ResourceHistorySample,
   sampleFromResources,
 } from "../resource-history";
+import { soccerMonth } from "../soccer";
 import { advanceVegetation } from "../vegetation";
+import {
+  landExit,
+  nearestShore,
+  shoreMigrant,
+  swims,
+} from "../water-migration";
 import { countWorldResources, type WorldResources } from "../world-resources";
 import { GOD_ACTIONS } from "./actions";
 import { DisasterAvoidance } from "./avoidance";
@@ -53,6 +70,7 @@ export interface WorldSnapshot extends WorldView {
   map: MapData;
 }
 const MAX_EFFECTS = 16;
+const FLASH_RECYCLE = new Set<PowerId>(["raze", "lightning", "sun", "rain"]);
 export const EFFECT_CAP_MESSAGE = "Let a few active powers finish first.";
 const caught = (count: number) =>
   `${count} Mossling${count === 1 ? "" : "s"} caught the black death.`;
@@ -122,6 +140,7 @@ export class GodWorld {
         lastMatedAt: m.lastMatedAt,
         parents: m.parents ? ([...m.parents] as [number, number]) : undefined,
         ritual: m.ritual ? { ...m.ritual } : undefined,
+        soccer: m.soccer ? { ...m.soccer } : undefined,
       };
     });
     this.nextMosslingId =
@@ -188,6 +207,7 @@ export class GodWorld {
           (m.health ?? 100) -
             amount * Math.max(0.2, 1 - toughness * 0.35 - tolerance * 0.45),
         );
+        if (m.health > 0) markCurse(m, this.elapsed);
       },
       damageTree: (cell, amount) => {
         if (!cell.tree || amount <= 0) return;
@@ -275,12 +295,13 @@ export class GodWorld {
       ...this.events,
     ].slice(0, 30);
   }
-  private recordTagged(tag: WorldEvent["tag"]) {
+  private recordTagged(tag: WorldEvent["tag"], at?: { x: number; y: number }) {
     this.events = [
       {
         id: this.nextEventId++,
         message: "",
         tag,
+        ...at,
         ...(this.advancing ? gameDateAt(this.elapsed) : this.getDate()),
       },
       ...this.events,
@@ -353,13 +374,11 @@ export class GodWorld {
     if (!this.ecology.canEnter(index)) return "That ground is not ready yet.";
     return "That tile is not a safe place for a Mossling.";
   }
-  /** Crops and lightning finish on their first step; the slot after that is only a flash. */
+  /** These powers finish on their first step; the slot after that is only a flash. */
   private freeFlash(kind: PowerId) {
-    if (kind !== "raze" && kind !== "lightning") return;
+    if (!FLASH_RECYCLE.has(kind)) return;
     const index = this.effects.findIndex(
-      (effect) =>
-        (effect.kind === "raze" || effect.kind === "lightning") &&
-        effect.step > 0,
+      (effect) => FLASH_RECYCLE.has(effect.kind) && effect.step > 0,
     );
     if (index >= 0) this.effects.splice(index, 1);
   }
@@ -399,9 +418,15 @@ export class GodWorld {
     if (e.kind === "disease" && e.hit.size) this.record(caught(e.hit.size));
     if (e.kind === "raze" && e.hit.size)
       this.recordTagged("player-crop-planted");
+    this.markFireCurses();
     this.removeDead();
     this.revision++;
     return null;
+  }
+  private markFireCurses() {
+    for (const m of this.mosslings) {
+      if (touchesFire(this.map, m.cellIndex)) markCurse(m, this.elapsed);
+    }
   }
   private weatherRandom() {
     this.weatherState =
@@ -458,7 +483,8 @@ export class GodWorld {
     for (const m of this.mosslings) {
       if (
         (m.health ?? 100) > 0 &&
-        this.map.cells[m.cellIndex]?.terrain === "water"
+        this.map.cells[m.cellIndex]?.terrain === "water" &&
+        !swims(m.traits, gameDateAt(this.elapsed).season)
       ) {
         m.health = 0;
         this.drowned.add(m.id);
@@ -512,6 +538,7 @@ export class GodWorld {
       GOD_ACTIONS[e.kind].update(e, this.context, dt);
       e.step++;
     }
+    this.markFireCurses();
     this.soak(dt);
     this.spark(dt);
     this.removeDead();
@@ -540,6 +567,7 @@ export class GodWorld {
         this.ageCorpses();
         this.agePlague();
         const holding = this.mate();
+        for (const id of this.playSoccer(holding)) holding.add(id);
         this.wander(holding);
         this.spreadPlague();
         const result = this.ecology.month(
@@ -547,7 +575,8 @@ export class GodWorld {
           new Set(this.occupied.keys()),
         );
         const look = foliageAt(this.elapsed);
-        const withered = advanceCrops(this.map, look.crop);
+        const crops = advanceCrops(this.map, look.crop);
+        const withered = crops.withered;
         advanceVegetation(this.map);
         this.feed(look.crop);
         this.rollWeather();
@@ -560,6 +589,7 @@ export class GodWorld {
           this.record(
             `The carrots withered on ${withered} tile${withered === 1 ? "" : "s"}.`,
           );
+        if (crops.blightAt) this.recordTagged("crop-blight", crops.blightAt);
         this.recordResourceHistory();
         this.nextMonth += MONTH_SECONDS;
         changed = true;
@@ -738,6 +768,11 @@ export class GodWorld {
       this.mosslings.filter((m) => (m.health ?? 100) > 0).map((m) => m.id),
     );
     for (const m of this.mosslings) {
+      if (
+        (m.health ?? 100) <= 0 ||
+        (m.soccer && !living.has(m.soccer.partnerId))
+      )
+        m.soccer = undefined;
       const ritual = m.ritual;
       if (!ritual || (m.health ?? 100) <= 0) {
         if ((m.health ?? 100) <= 0) m.ritual = undefined;
@@ -781,9 +816,101 @@ export class GodWorld {
     return busy;
   }
 
+  private playSoccer(busy: ReadonlySet<number>) {
+    return soccerMonth({
+      mosslings: this.mosslings,
+      width: this.map.width,
+      elapsed: this.elapsed,
+      random: () => this.random(),
+      isPanicked: (id) => this.avoidance.isPanicked(id),
+      busy,
+      canMoveTo: (m, x, y) => this.context.canMoveTo(m, x, y),
+      move: (m, x, y) => this.context.move(m, x, y),
+    });
+  }
+
+  private openWater() {
+    const width = this.map.width;
+    const shores: { x: number; y: number }[] = [];
+    this.map.cells.forEach((cell, index) => {
+      if (cell.terrain !== "water" || cell.tree || cell.burning) return;
+      if (this.occupied.has(index)) return;
+      shores.push({ x: index % width, y: Math.floor(index / width) });
+    });
+    return shores;
+  }
+
+  /** Land stays on the usual rule. Water is allowed one step in from the shore. */
+  private canEnterShore(m: PreviewMossling, x: number, y: number) {
+    if (this.context.canMoveTo(m, x, y)) return true;
+    const cell = this.context.cell(x, y);
+    if (!cell || cell.terrain !== "water" || cell.tree || cell.burning)
+      return false;
+    const from = this.map.cells[m.cellIndex];
+    if (!from || from.terrain === "water") return false;
+    const index = y * this.map.width + x;
+    return !this.occupied.has(index) && this.ecology.canEnter(index);
+  }
+
+  private enterShore(m: PreviewMossling, x: number, y: number) {
+    if (this.context.canMoveTo(m, x, y)) {
+      this.context.move(m, x, y);
+      return;
+    }
+    if (!this.canEnterShore(m, x, y)) return;
+    const index = y * this.map.width + x;
+    this.occupied.delete(m.cellIndex);
+    m.cellIndex = index;
+    this.occupied.set(index, m);
+  }
+
+  /** Up to two monthly steps toward a migration target (carrots or shore). */
+  private migrateToward(
+    m: PreviewMossling,
+    x: number,
+    y: number,
+    target: FieldPoint,
+    canStep: (nx: number, ny: number) => boolean,
+    arrived: (cell: (typeof this.map.cells)[number] | undefined) => boolean,
+    move: (nx: number, ny: number) => void,
+  ) {
+    const width = this.map.width;
+    let cx = x;
+    let cy = y;
+    for (let n = 0; n < 2; n++) {
+      if (arrived(this.map.cells[cy * width + cx])) break;
+      const step = fieldStep(cx, cy, target, canStep);
+      if (!step) break;
+      const before = m.cellIndex;
+      move(cx + step[0], cy + step[1]);
+      if (m.cellIndex === before) break;
+      cx = m.cellIndex % width;
+      cy = Math.floor(m.cellIndex / width);
+    }
+  }
+
+  private carrotBuckets() {
+    const width = this.map.width;
+    const buckets = new Map<string, { x: number; y: number }[]>();
+    let count = 0;
+    this.map.cells.forEach((cell, index) => {
+      if (!isCarrotTile(cell)) return;
+      count++;
+      addToBucket(buckets, index % width, Math.floor(index / width), {
+        x: index % width,
+        y: Math.floor(index / width),
+      });
+    });
+    return count > 0 ? buckets : null;
+  }
+
   private wander(holding: ReadonlySet<number>) {
     const random = () => this.random();
     const carriers = this.carrierBuckets();
+    const season = gameDateAt(this.elapsed).season;
+    const migrating = farmingSeason(season);
+    const fields = migrating ? this.carrotBuckets() : null;
+    const shores = this.openWater();
     // Rotate visitation order. Healthy Mosslings near the black death
     // bias that step; everyone else still shuffles their neighbors.
     const start = Math.floor(random() * this.mosslings.length);
@@ -809,11 +936,14 @@ export class GodWorld {
         [0, 1],
         [0, -1],
       ];
-      for (let j = directions.length - 1; j > 0; j--) {
-        const pick = Math.floor(random() * (j + 1));
-        [directions[j], directions[pick]] = [directions[pick], directions[j]];
-      }
+      const shuffle = () => {
+        for (let j = directions.length - 1; j > 0; j--) {
+          const pick = Math.floor(random() * (j + 1));
+          [directions[j], directions[pick]] = [directions[pick], directions[j]];
+        }
+      };
       if (carrier && toward !== null) {
+        shuffle();
         let chosen: number[] | undefined;
         let bestDistance = 0;
         for (const step of directions) {
@@ -834,6 +964,62 @@ export class GodWorld {
           continue;
         }
       }
+      if (shoreMigrant(m.traits)) {
+        const onWater = this.map.cells[origin]?.terrain === "water";
+        if (migrating) {
+          if (onWater) continue;
+          const target = nearestShore(x, y, shores);
+          if (target) {
+            this.migrateToward(
+              m,
+              x,
+              y,
+              target,
+              (nx, ny) => this.canEnterShore(m, nx, ny),
+              (cell) => cell?.terrain === "water",
+              (nx, ny) => this.enterShore(m, nx, ny),
+            );
+            continue;
+          }
+        } else if (onWater) {
+          const step = landExit(x, y, (nx, ny) =>
+            this.context.canMoveTo(m, nx, ny),
+          );
+          if (step) this.context.move(m, x + step[0], y + step[1]);
+          continue;
+        }
+      }
+      if (fields) {
+        if (isCarrotTile(this.map.cells[origin])) continue;
+        const nearby: { x: number; y: number }[] = [];
+        eachInReach(fields, x, y, FIELD_REACH, (field) => nearby.push(field));
+        const target = nearestCarrot(x, y, nearby);
+        if (target) {
+          this.migrateToward(
+            m,
+            x,
+            y,
+            target,
+            (nx, ny) => this.context.canMoveTo(m, nx, ny),
+            isCarrotTile,
+            (nx, ny) => this.context.move(m, nx, ny),
+          );
+          continue;
+        }
+      }
+      shuffle();
+      if (!fields && isCarrotTile(this.map.cells[origin])) {
+        for (const [dx, dy] of directions) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (!this.context.canMoveTo(m, nx, ny)) continue;
+          const next = ny * this.map.width + nx;
+          if (isCarrotTile(this.map.cells[next])) continue;
+          this.context.move(m, nx, ny);
+          if (m.cellIndex !== origin) break;
+        }
+        if (m.cellIndex !== origin) continue;
+      }
       for (const [dx, dy] of directions) {
         this.context.move(m, x + dx, y + dy);
         if (m.cellIndex !== origin) break;
@@ -849,6 +1035,7 @@ export class GodWorld {
       lastMatedAt: m.lastMatedAt,
       parents: m.parents ? ([...m.parents] as [number, number]) : undefined,
       ritual: m.ritual ? { ...m.ritual } : undefined,
+      soccer: m.soccer ? { ...m.soccer } : undefined,
     }));
   }
   /** UI publish. The live map stays on the engine; canvases repaint from revision. */

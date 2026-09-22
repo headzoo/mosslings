@@ -1,6 +1,7 @@
 import type { Ref } from "react";
+import { type MapTool, mapToolButtonLabel } from "@/lib/map-tool-shortcuts";
 
-export type MapTool = "pointer" | "move" | "zoom-in" | "zoom-out";
+export type { MapTool };
 
 function Magnifier({ sign }: { sign: "+" | "-" }) {
   return (
@@ -33,12 +34,17 @@ export function ZoomControls({
   tool: MapTool;
   onSelectTool: (tool: MapTool) => void;
 }) {
+  const pointerLabel = mapToolButtonLabel("pointer");
+  const moveLabel = mapToolButtonLabel("move");
+  const zoomOutLabel = mapToolButtonLabel("zoom-out");
+  const zoomInLabel = mapToolButtonLabel("zoom-in");
+
   return (
     <fieldset ref={ref} className="zoom-controls" aria-label="Map view">
       <button
         type="button"
-        aria-label="Inspect map"
-        title="Inspect map"
+        aria-label={pointerLabel}
+        title={pointerLabel}
         aria-pressed={tool === "pointer"}
         disabled={!ready}
         onClick={() => onSelectTool("pointer")}
@@ -57,8 +63,8 @@ export function ZoomControls({
       </button>
       <button
         type="button"
-        aria-label="Move map"
-        title="Move map"
+        aria-label={moveLabel}
+        title={moveLabel}
         aria-pressed={tool === "move"}
         disabled={!ready || tileSize <= 8}
         onClick={() => onSelectTool("move")}
@@ -80,8 +86,8 @@ export function ZoomControls({
       </button>
       <button
         type="button"
-        aria-label="Zoom out"
-        title="Zoom out"
+        aria-label={zoomOutLabel}
+        title={zoomOutLabel}
         aria-pressed={tool === "zoom-out"}
         disabled={!ready || tileSize === 8}
         onClick={() => onSelectTool("zoom-out")}
@@ -90,8 +96,8 @@ export function ZoomControls({
       </button>
       <button
         type="button"
-        aria-label="Zoom in"
-        title="Zoom in"
+        aria-label={zoomInLabel}
+        title={zoomInLabel}
         aria-pressed={tool === "zoom-in"}
         disabled={!ready || tileSize === 32}
         onClick={() => onSelectTool("zoom-in")}

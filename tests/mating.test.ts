@@ -250,7 +250,8 @@ test("parents wait a year after family dispersal before courting again", () => {
   const suitor = creature(4, 1, 2, 7, brave);
   family.push(suitor);
   step(family, 7, 7, () => 0, parentA.lastMatedAt! + MONTH_SECONDS);
-  assert.equal(parentA.ritual, undefined);
+  const ritualDuringCooldown = parentA.ritual;
+  assert.equal(ritualDuringCooldown, undefined);
 
   step(family, 7, 7, () => 0, parentA.lastMatedAt! + YEAR_SECONDS);
   assert.equal(parentA.ritual?.phase, "courtship");
@@ -265,7 +266,8 @@ test("a cancelled courtship does not start the year-long mating cooldown", () =>
   assert.equal(survivor.ritual?.phase, "courtship");
   lost.health = 0;
   step(pair, 8, 3, () => 0, MONTH_SECONDS * 2);
-  assert.equal(survivor.ritual, undefined);
+  const ritualAfterLoss = survivor.ritual;
+  assert.equal(ritualAfterLoss, undefined);
   assert.equal(survivor.lastMatedAt, undefined);
 
   const suitor = creature(3, 1, 0, 8, brave);

@@ -91,6 +91,33 @@ test("a winter tree keeps its trunk and drops the leaves", () => {
   assert.ok(trunk && !isGreen(trunk));
 });
 
+function countPlantPixels(field: MapData, size: number, look: SeasonLook) {
+  let plants = 0;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const color = terrainPixel(field, 0, x, y, size, look);
+      if (color && (isGreen(color) || isOrange(color))) plants += 1;
+    }
+  }
+  return plants;
+}
+
+function furrowContrast(field: MapData, size: number, look: SeasonLook) {
+  const rowLight: number[] = [];
+  for (let y = 0; y < size; y++) {
+    let sum = 0;
+    let count = 0;
+    for (let x = 0; x < size; x++) {
+      const color = terrainPixel(field, 0, x, y, size, look);
+      if (!color) continue;
+      sum += luminance(color);
+      count += 1;
+    }
+    if (count) rowLight.push(sum / count);
+  }
+  return Math.max(...rowLight) - Math.min(...rowLight);
+}
+
 test("ripe carrots sit in separated rows over soil", () => {
   const field = mapOf(cell({ terrain: "dirt", growth: 1 }));
   const size = 24;
@@ -117,6 +144,43 @@ test("ripe carrots sit in separated rows over soil", () => {
   const between = terrainPixel(field, 0, 0, bands[0].end + 1, size, SUMMER);
   assert.ok(between);
   assert.equal(isOrange(between), false);
+});
+
+test("autumn and winter crops at close zoom are empty plowed beds", () => {
+  const field = mapOf(cell({ terrain: "dirt", growth: 1 }));
+  const autumn: SeasonLook = {
+    cover: 1,
+    autumn: 1,
+    snow: 0,
+    ice: 0,
+    crop: 0.5,
+  };
+  const winter: SeasonLook = {
+    cover: 0.08,
+    autumn: 0,
+    snow: 0,
+    ice: 0.8,
+    crop: 0,
+  };
+  for (const [look, size] of [
+    [autumn, 24],
+    [winter, 32],
+  ] as const) {
+    assert.equal(countPlantPixels(field, size, look), 0);
+    assert.ok(furrowContrast(field, size, look) > 30);
+  }
+});
+
+test("spring crops still put up a stand at close zoom", () => {
+  const field = mapOf(cell({ terrain: "dirt", growth: 1 }));
+  const spring: SeasonLook = {
+    cover: 0.54,
+    autumn: 0,
+    snow: 0,
+    ice: 0.5,
+    crop: 0.5,
+  };
+  assert.ok(countPlantPixels(field, 24, spring) > 0);
 });
 
 test("grass is more than one green", () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { type RefObject, useLayoutEffect, useRef } from "react";
+import { type RefObject, useLayoutEffect, useRef, useState } from "react";
 import { foliageAt, YEAR_SECONDS } from "@/lib/game-time";
 import type { MapCell, MapData } from "@/lib/map";
 import {
@@ -10,8 +10,11 @@ import {
   snowDepth,
 } from "@/lib/map-preview";
 import { previewTraits } from "@/lib/mossling-traits";
+import { capturePortrait } from "@/lib/screenshot";
 
+import { HudIcon } from "./HudIcon";
 import { MosslingPortrait } from "./MosslingPortrait";
+import { ScreenshotModal } from "./ScreenshotModal";
 import { TilePortrait } from "./TilePortrait";
 
 const terrainInfo = {
@@ -40,6 +43,11 @@ const cropInfo = {
   title: "Carrots",
   description:
     "A carrot patch, full of a Mossling's favorite food. Small green tops poke up first, then orange roots swell beneath them. With rain and sun, the rows grow into a feast.",
+};
+const deadCropInfo = {
+  title: "Dead carrots",
+  description:
+    "A blight took these carrots when they ripened. The rows are dead and feed no one. The sickness spreads into the carrot tiles beside them.",
 };
 export function TileInspector({
   seed,
@@ -78,15 +86,18 @@ export function TileInspector({
     originDy: number;
   } | null>(null);
   const crop = cell.growth !== undefined && !cell.tree;
+  const deadCrop = crop && cell.blight === true && (cell.growth ?? 0) >= 1;
   const info = cell.tree
     ? {
         title: "Tree",
         description:
           "A small mossy tree takes root here, offering a patch of shade. A well-watered forest spreads into nearby grass and dirt. Fire and storms can damage it.",
       }
-    : crop
-      ? cropInfo
-      : terrainInfo[cell.terrain];
+    : deadCrop
+      ? deadCropInfo
+      : crop
+        ? cropInfo
+        : terrainInfo[cell.terrain];
   const traits = mossling
     ? (mossling.traits ?? previewTraits(seed, mossling.id))
     : [];
@@ -96,7 +107,8 @@ export function TileInspector({
   const ice = map ? iceCover(y * map.width + x, look.ice) : look.ice;
   const buried = map ? snowBlanket(map, y * map.width + x, look) : false;
   const alive = mossling ? (mossling.health ?? 100) > 0 : false;
-  const showActions = alive && (onMove || onClone);
+  const [portraitShot, setPortraitShot] = useState<Blob | null>(null);
+  const [portraitProblem, setPortraitProblem] = useState<string | null>(null);
   useLayoutEffect(() => {
     const dialog = dialogRef.current;
     const host = hostRef.current;
@@ -235,6 +247,7 @@ export function TileInspector({
                 {(mossling.panic ?? 0) > 0.1 &&
                   " · Panicked — trying to escape"}
                 {mossling.ritual?.phase === "courtship" && " · Courting"}
+                {mossling.soccer?.phase === "play" && " · Playing soccer"}
                 {mossling.ritual?.phase === "family" &&
                   " · Staying with family"}
                 {mossling.lastMatedAt != null &&
@@ -248,28 +261,46 @@ export function TileInspector({
                 </p>
               )}
             </div>
-            {showActions && (
-              <div className="inspector-actions">
-                {onMove && (
-                  <button
-                    type="button"
-                    className="inspector-action-button"
-                    onClick={onMove}
-                  >
-                    Move
-                  </button>
-                )}
-                {onClone && (
-                  <button
-                    type="button"
-                    className="inspector-action-button"
-                    onClick={onClone}
-                  >
-                    Clone
-                  </button>
-                )}
-              </div>
-            )}
+            <div className="inspector-actions">
+              <button
+                type="button"
+                className="inspector-action-button inspector-shot"
+                aria-label="Take a screenshot"
+                title="Take a screenshot"
+                onClick={() => {
+                  const current = mossling;
+                  void capturePortrait(current)
+                    .then((blob) => {
+                      setPortraitProblem(null);
+                      setPortraitShot(blob);
+                    })
+                    .catch(() => {
+                      setPortraitShot(null);
+                      setPortraitProblem("The portrait couldn't be captured.");
+                    });
+                }}
+              >
+                <HudIcon src="/mosslings/icons/camera.png" />
+              </button>
+              {alive && onMove && (
+                <button
+                  type="button"
+                  className="inspector-action-button"
+                  onClick={onMove}
+                >
+                  Move
+                </button>
+              )}
+              {alive && onClone && (
+                <button
+                  type="button"
+                  className="inspector-action-button"
+                  onClick={onClone}
+                >
+                  Clone
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           <>
@@ -377,6 +408,18 @@ export function TileInspector({
           </>
         )}
       </div>
+      {mossling && (portraitShot || portraitProblem) && (
+        <ScreenshotModal
+          blob={portraitShot ?? undefined}
+          filename={`mossling-${mossling.id + 1}.png`}
+          kind="portrait"
+          problem={portraitProblem ?? undefined}
+          onDismiss={() => {
+            setPortraitShot(null);
+            setPortraitProblem(null);
+          }}
+        />
+      )}
     </dialog>
   );
 }

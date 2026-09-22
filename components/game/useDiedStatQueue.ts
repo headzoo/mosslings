@@ -1,14 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FRAME_COUNT } from "@/lib/mossling-detail";
-
-const ASCENT_SECONDS = 1;
-
-function playingFrame(into: number) {
-  const span = ASCENT_SECONDS / FRAME_COUNT;
-  return Math.min(FRAME_COUNT - 1, Math.floor(into / span));
-}
+import { ASCENT_SECONDS, diedAscentFrame } from "@/lib/died-sprite";
 
 export function useDiedStatQueue(
   deaths: number | null,
@@ -60,7 +53,7 @@ export function useDiedStatQueue(
         seen.current === null
           ? null
           : seen.current - queue.current + (animating ? 1 : 0);
-      const nextFrame = queue.current > 0 ? playingFrame(into) : 0;
+      const nextFrame = queue.current > 0 ? diedAscentFrame(into) : 0;
 
       if (nextDisplayed !== lastDisplayed) {
         lastDisplayed = nextDisplayed;

@@ -17,12 +17,15 @@ export const rain: GodAction = {
   id: "rain",
   label: "Rain",
   create: (point, seed, id) => effect("rain", point, seed, id, 6, 5),
-  update(e, world, dt) {
+  update(e, world) {
+    if (e.step !== 0) return;
     const strength = e.intensity;
+    const moistureBoost = e.duration * 0.22 * strength;
+    const fertilityBoost = e.duration * 0.035 * strength;
     world.area(e.x, e.y, e.radius, (cell) => {
-      cell.moisture = Math.min(1, cell.moisture + dt * 0.22 * strength);
+      cell.moisture = Math.min(1, cell.moisture + moistureBoost);
       if (cell.terrain !== "water" && cell.terrain !== "rock")
-        cell.fertility = Math.min(1, cell.fertility + dt * 0.035 * strength);
+        cell.fertility = Math.min(1, cell.fertility + fertilityBoost);
       if (cell.moisture > 0.72) cell.burning = false;
     });
   },

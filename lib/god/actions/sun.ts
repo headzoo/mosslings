@@ -8,11 +8,12 @@ export const sun: GodAction = {
   id: "sun",
   label: "Sun",
   create: (point, seed, id) => effect("sun", point, seed, id, 4, 5),
-  update(e, world, dt) {
-    world.area(e.x, e.y, e.radius, (cell) => {
-      cell.light = Math.min(1, (cell.light ?? 0) + dt * 0.28);
-    });
+  update(e, world) {
     if (e.step !== 0) return;
+    const lightBoost = e.duration * 0.28;
+    world.area(e.x, e.y, e.radius, (cell) => {
+      cell.light = Math.min(1, (cell.light ?? 0) + lightBoost);
+    });
     const width = world.map.width;
     for (const mossling of world.mosslings) {
       if ((mossling.health ?? 100) <= 0) continue;

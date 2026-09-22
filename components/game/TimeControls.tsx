@@ -34,6 +34,20 @@ export function Year({
     </div>
   );
 }
+export function PlayShot({ onScreenshot }: { onScreenshot?: () => void }) {
+  return (
+    <button
+      type="button"
+      className="panel"
+      aria-label="Take a screenshot"
+      title="Take a screenshot"
+      disabled={!onScreenshot}
+      onClick={onScreenshot}
+    >
+      <HudIcon src="/mosslings/icons/camera.png" />
+    </button>
+  );
+}
 export function PlayMute({
   muted,
   onToggle,
@@ -122,6 +136,7 @@ export function PlayControls({
   onSkip,
   onFastForward,
   onRestoreWelcome,
+  onScreenshot,
 }: {
   isPlaying: boolean;
   rate: number;
@@ -129,6 +144,7 @@ export function PlayControls({
   onSkip: () => void;
   onFastForward: () => void;
   onRestoreWelcome: () => void;
+  onScreenshot?: () => void;
 }) {
   const music = useMusic();
   const [helpOpen, setHelpOpen] = useState(false);
@@ -143,6 +159,7 @@ export function PlayControls({
       >
         <HudIcon src="/mosslings/icons/help.png" />
       </button>
+      <PlayShot onScreenshot={onScreenshot} />
       <PlayMute muted={music.muted} onToggle={music.toggleMuted} />
       <PlayPause isPlaying={isPlaying} onToggle={onToggle} />
       <PlaySkip onSkip={onSkip} />

@@ -34,6 +34,11 @@ export interface MapCell {
    * 0 is a new planting; 1 is a ripe field that counts as food.
    */
   growth?: number;
+  /**
+   * Hidden until the carrot is fully ripe, then it looks dead and
+   * spreads to touching carrot tiles.
+   */
+  blight?: boolean;
   /** Progress toward natural recovery after a catastrophe (0..1). */
   recovery?: number;
   /** Final terrain classification used by the simulation. */

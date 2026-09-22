@@ -161,6 +161,7 @@ test("bounce frames wrap, desync neighbors, and freeze the dead", () => {
     seen.add(portraitBounceFrame(0, (i + 0.5) * span));
   }
   assert.equal(seen.size, PORTRAIT_FRAME_COUNT);
+  assert.equal(portraitBounceFrame(0, span * 1.5, 100, 5), 0);
 });
 
 test("look keys ignore live health but mark the dead", () => {
@@ -169,4 +170,17 @@ test("look keys ignore live health but mark the dead", () => {
   const dead = { ...living(), health: 0 };
   assert.equal(portraitLookKey(a), portraitLookKey(b));
   assert.notEqual(portraitLookKey(a), portraitLookKey(dead));
+});
+
+test("plague tints the body puke-green without darkening the face", () => {
+  const base = grayFrame(16, 16, { minX: 2, minY: 2, maxX: 13, maxY: 13 }, [
+    { x: 6, y: 6, rgb: [10, 10, 10] },
+  ]);
+  const healthy = skinPortrait(base, living());
+  const sick = skinPortrait(base, { ...living(), plagueMonths: 5 });
+  const bodyHealthy = pixel(healthy, 4, 4);
+  const bodySick = pixel(sick, 4, 4);
+  assert.ok(bodySick[1] > bodyHealthy[1]);
+  assert.ok(bodySick[2] < bodyHealthy[2]);
+  assert.deepEqual(pixel(sick, 6, 6), [10, 10, 10, 255]);
 });

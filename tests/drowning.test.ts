@@ -110,6 +110,10 @@ test("all death causes contribute to the cumulative tally and a fresh world star
   world.context.damage(12, 10000, "impact");
   world.tick(0.05);
   assert.equal(world.snapshot().resources.killed, 1);
+  const soaked = world.mosslings.find((m) => m.id === 2);
+  assert.ok(soaked);
+  for (const trait of soaked.traits ?? [])
+    if (trait.label === "Water tolerance") trait.value = 20;
   world.map.cells[0].terrain = "water";
   world.tick(0.05);
   assert.equal(world.snapshot().resources.killed, 2);

@@ -390,14 +390,27 @@ test("winter clouds drop snow and warmer clouds drop rain", () => {
   assert.ok(rain.has("#102018"));
   assert.equal(rain.has("#f7fbff"), false);
 });
-test("rain still stops when sixteen powers are already active", () => {
+test("a quiet rain stroke skips the log and recycles a finished flash", () => {
   const world = new GodWorld(fixture(20, 20), []);
-  for (let i = 0; i < 16; i++) world.cast("rain", i, 0);
-  assert.equal(
-    world.cast("rain", 0, 1, { quiet: true }),
-    "Let a few active powers finish first.",
-  );
+  for (let i = 0; i < 16; i++) assert.equal(world.cast("rain", i, 0), null);
   assert.equal(world.effects.length, 16);
+  const before = world.events.length;
+  assert.ok((world.map.cells[19 * 20 + 19].moisture ?? 0) < 0.72);
+  assert.equal(world.cast("rain", 19, 19, { quiet: true }), null);
+  assert.equal(world.effects.length, 16);
+  assert.equal(world.events.length, before);
+  assert.ok(world.map.cells[19 * 20 + 19].moisture > 0.72);
+});
+test("a quiet sun stroke skips the log and recycles a finished flash", () => {
+  const world = new GodWorld(fixture(20, 20), []);
+  for (let i = 0; i < 16; i++) assert.equal(world.cast("sun", i, 0), null);
+  assert.equal(world.effects.length, 16);
+  const before = world.events.length;
+  assert.equal(world.map.cells[19 * 20 + 19].light, undefined);
+  assert.equal(world.cast("sun", 19, 19, { quiet: true }), null);
+  assert.equal(world.effects.length, 16);
+  assert.equal(world.events.length, before);
+  assert.equal(world.map.cells[19 * 20 + 19].light, 1);
 });
 test("a quiet disease cast still records who caught it", () => {
   const world = new GodWorld(fixture(12, 12), [mossling(0)]);
