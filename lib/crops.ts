@@ -195,6 +195,7 @@ export function provisionCrops(
     if (
       cell.terrain === "water" ||
       cell.terrain === "rock" ||
+      cell.terrain === "sand" ||
       cell.tree ||
       cell.burning
     )
@@ -220,7 +221,7 @@ function plant(cell: MapCell, seed: number, index: number) {
 /**
  * Plant `count` ripe crop tiles in a few clusters.
  * Grass is used first; dirt is converted when grass runs out.
- * Occupied, forested, burning, and damaged tiles are left alone.
+ * Sand, rock, water, occupied, forested, burning, and damaged tiles are left alone.
  */
 export function plantStarterFields(
   map: MapData,

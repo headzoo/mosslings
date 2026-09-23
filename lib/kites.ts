@@ -1,3 +1,4 @@
+import { chasing } from "./chase";
 import { farmingSeason, pullingCarrots } from "./field-work";
 import { touchesFire } from "./fire-sprite";
 import type { Season } from "./game-time";
@@ -38,7 +39,7 @@ function kiteSide(id: number): -1 | 1 {
 /**
  * Spring and summer, living, and the stable roll.
  * Temperament does not matter.
- * Fire, water, carrot rows, and a kick already occupy the sprite.
+ * Fire, water, carrot rows, a kick, and a chase already occupy the sprite.
  */
 export function fliesKite(
   mossling: PreviewMossling,
@@ -50,6 +51,7 @@ export function fliesKite(
   if (!farmingSeason(season)) return false;
   if (!kiteRoll(mossling.id)) return false;
   if (playingSoccer(mossling, partner, map.width)) return false;
+  if (chasing(mossling, partner, map.width)) return false;
   const cell = map.cells[mossling.cellIndex];
   if (cell?.terrain === "water") return false;
   if (pullingCarrots(season, cell)) return false;

@@ -4,67 +4,68 @@ import { useEffect, useRef } from "react";
 import type { MapData } from "@/lib/map";
 import type { Camera } from "@/lib/map-camera";
 import type { PreviewMossling } from "@/lib/map-preview";
-import { ballFill, ballsInView, SOCCER_BALL_ROWS } from "@/lib/soccer";
+import {
+  NOTE_HEIGHT,
+  NOTE_ROWS,
+  NOTE_WIDTH,
+  WHISTLE_INK,
+  whistlesInView,
+} from "@/lib/whistle";
 import type { FramePainter } from "./useGodWorld";
-
-const BALL_WIDTH = SOCCER_BALL_ROWS[0].length;
-const BALL_HEIGHT = SOCCER_BALL_ROWS.length;
 
 function onScreen(
   px: number,
   py: number,
-  size: number,
+  width: number,
+  height: number,
   viewWidth: number,
   viewHeight: number,
 ) {
   return !(
     px >= viewWidth ||
     py >= viewHeight ||
-    px + size <= 0 ||
-    py + size <= 0
+    px + width <= 0 ||
+    py + height <= 0
   );
 }
 
-function drawBall(
+function drawNote(
   context: CanvasRenderingContext2D,
   cx: number,
   cy: number,
-  size: number,
+  width: number,
+  height: number,
+  alpha: number,
   viewWidth: number,
   viewHeight: number,
-  snow: boolean,
 ) {
-  const left = Math.round(cx - size / 2);
-  const top = Math.round(cy - size / 2);
-  if (!onScreen(left, top, size, viewWidth, viewHeight)) return;
-  if (size <= 1) {
-    const fill = ballFill(snow ? "w" : "b", snow);
-    if (!fill) return;
-    context.fillStyle = fill;
+  if (alpha <= 0.01) return;
+  const left = Math.round(cx - width / 2);
+  const top = Math.round(cy - height / 2);
+  if (!onScreen(left, top, width, height, viewWidth, viewHeight)) return;
+  context.globalAlpha = alpha;
+  if (width <= 1 && height <= 1) {
     context.fillRect(left, top, 1, 1);
     return;
   }
-  for (let y = 0; y < size; y++) {
+  for (let y = 0; y < height; y++) {
     const row =
-      SOCCER_BALL_ROWS[
-        Math.min(BALL_HEIGHT - 1, Math.floor((y * BALL_HEIGHT) / size))
+      NOTE_ROWS[
+        Math.min(NOTE_HEIGHT - 1, Math.floor((y * NOTE_HEIGHT) / height))
       ];
     if (!row) continue;
-    for (let x = 0; x < size; x++) {
+    for (let x = 0; x < width; x++) {
       const column = Math.min(
-        BALL_WIDTH - 1,
-        Math.floor((x * BALL_WIDTH) / size),
+        NOTE_WIDTH - 1,
+        Math.floor((x * NOTE_WIDTH) / width),
       );
-      const mark = row[column];
-      const fill = mark ? ballFill(mark, snow) : null;
-      if (!fill) continue;
-      context.fillStyle = fill;
+      if (row[column] !== "1") continue;
       context.fillRect(left + x, top + y, 1, 1);
     }
   }
 }
 
-export function SoccerBall({
+export function WhistleNotes({
   map,
   mosslings,
   cameraRef,
@@ -87,54 +88,46 @@ export function SoccerBall({
   const mapRef = useRef(map);
   const mosslingsRef = useRef(mosslings);
   const elapsedRef = useRef(elapsed);
+  const tileSizeRef = useRef(tileSize);
   mapRef.current = map;
   mosslingsRef.current = mosslings;
   elapsedRef.current = elapsed;
+  tileSizeRef.current = tileSize;
   useEffect(() => {
     const canvas = ref.current;
     const context = canvas?.getContext("2d");
     if (!canvas || !context) return;
-    let clear = true;
     const render = () => {
+      context.clearRect(0, 0, canvas.width, canvas.height);
       const camera = cameraRef.current;
-      if (!camera) {
-        if (!clear) {
-          context.clearRect(0, 0, canvas.width, canvas.height);
-          clear = true;
-        }
-        return;
-      }
-      const marks = ballsInView(
+      if (!camera) return;
+      const size = tileSizeRef.current;
+      const marks = whistlesInView(
         mosslingsRef.current,
         mapRef.current.width,
         camera,
-        tileSize,
+        size,
         elapsedRef.current(),
       );
-      if (!marks.length) {
-        if (!clear) {
-          context.clearRect(0, 0, canvas.width, canvas.height);
-          clear = true;
-        }
-        return;
-      }
-      context.clearRect(0, 0, canvas.width, canvas.height);
-      clear = false;
+      if (!marks.length) return;
       context.imageSmoothingEnabled = false;
+      context.fillStyle = WHISTLE_INK;
       for (const mark of marks) {
-        drawBall(
+        drawNote(
           context,
-          camera.left + mark.x * tileSize,
-          camera.top + mark.y * tileSize,
-          mark.size,
+          camera.left + mark.x * size,
+          camera.top + mark.y * size,
+          mark.width,
+          mark.height,
+          mark.alpha,
           width,
           height,
-          mark.snow === true,
         );
       }
+      context.globalAlpha = 1;
     };
     return subscribeFrame(render);
-  }, [cameraRef, subscribeFrame, tileSize, width, height]);
+  }, [cameraRef, subscribeFrame, width, height]);
   return (
     <canvas
       ref={ref}

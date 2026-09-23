@@ -8,7 +8,7 @@ import {
   ensureIntroZone,
   introZoneIndices,
 } from "@/lib/intro-mosslings";
-import { generateMap, type MapData, randomSeed } from "@/lib/map";
+import { generateMap, type MapData, pruneBeaches, randomSeed } from "@/lib/map";
 import {
   createPreviewMosslings,
   getGridDimensions,
@@ -85,6 +85,7 @@ export function GameBootstrap() {
       plantStarterForests(map, occupied);
       plantStarterFields(map, mosslings.length, occupied);
       ensureIntroZone(map);
+      pruneBeaches(map);
       setWorld({ map, mosslings });
     };
     const frame = requestAnimationFrame(measure);
@@ -106,7 +107,8 @@ export function GameBootstrap() {
         onIntroContinue={() =>
           setIntroPhase((phase) => {
             if (phase === "mosslings") return "species";
-            if (phase === "species") return "powers";
+            if (phase === "species") return "map";
+            if (phase === "map") return "powers";
             if (phase === "powers") return "world";
             if (phase === "world") {
               try {

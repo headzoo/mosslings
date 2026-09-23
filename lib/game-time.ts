@@ -17,6 +17,8 @@ const SPRING_RAW_INDEX =
   SEASONS.length;
 const SPRING_START_IN_YEAR = SPRING_RAW_INDEX * SEASON_SECONDS;
 export const MONTH_SECONDS = SEASON_SECONDS / 3;
+/** Four weeks make a month. */
+export const WEEK_SECONDS = MONTH_SECONDS / 4;
 export const YEAR_SECONDS = SEASON_SECONDS * SEASONS.length;
 export const FAST_FORWARD_STEP = 1 / 8;
 export const MAX_TIME_RATE = 3;

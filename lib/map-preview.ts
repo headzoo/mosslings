@@ -37,13 +37,17 @@ export interface MatingRitual {
   role?: "child";
 }
 
+export type PlayKind = "soccer" | "chase" | "snowball";
+
 export interface SoccerGame {
   partnerId: number;
-  /** Game seconds when the kickoff began, shared so the pair kicks in step. */
+  /** Game seconds when play began, shared so the pair stays in step. */
   since: number;
   face: "left" | "right";
-  /** Approach is the walk in. Play is the two months they kick. */
+  /** Approach is the walk in. Play is the game itself. */
   phase: "approach" | "play";
+  /** Missing means soccer, so a game saved before chase still kicks. */
+  kind?: PlayKind;
 }
 
 export interface PreviewMossling {
@@ -67,7 +71,7 @@ export interface PreviewMossling {
   /** Game seconds when this mossling last finished a successful mating cycle. */
   lastMatedAt?: number;
   ritual?: MatingRitual;
-  /** Set while a pair walks in or spends two months kicking a ball between them. */
+  /** Set while a pair walks in or plays soccer or chase. */
   soccer?: SoccerGame;
   /** Game seconds when they last survived lightning, meteor, tornado, quake, or fire. */
   cursedAt?: number;
@@ -157,7 +161,9 @@ export function cellVisualHash(cell: MapCell): number {
         ? 2
         : cell.terrain === "rock"
           ? 3
-          : 4;
+          : cell.terrain === "water"
+            ? 4
+            : 5;
   const damage =
     cell.damage === "burned"
       ? 1
@@ -380,6 +386,11 @@ export function terrainColor(
       return `hsl(85 3% ${34 + Math.round(cell.rockiness * 25) + variation}%)`;
     case "dirt":
       return `hsl(${32 + Math.round(cell.moisture * 15)} 36% ${30 + Math.round(cell.fertility * 15) + variation}%)`;
+    case "sand": {
+      const lightness = 62 + Math.round(cell.moisture * 6) + variation;
+      const hue = 40 + Math.round((1 - cell.moisture) * 8);
+      return `hsl(${hue} 42% ${lightness}%)`;
+    }
     case "grass": {
       const dry = brownBlend(cell.moisture);
       const bare = 1 - look.cover;

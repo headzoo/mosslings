@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useLayoutEffect, useRef, useState } from "react";
+import { mosslingsPublicAsset } from "@/lib/public-asset";
 
 export const WELCOME_PREFERENCE = "mosslings:hide-welcome";
 export const INTRO_PREFERENCE = "mosslings:hide-intro";
@@ -131,8 +132,8 @@ export function WelcomeSplash({
       <div className="welcome-art">
         <Image
           className="welcome-scene"
-          src="/mosslings/welcome-farm.webp"
-          alt="Eight colorful Mosslings farm a sunny garden under open sky. Two nestle close and blush, while the others tend little carrot rows."
+          src={mosslingsPublicAsset("/mosslings/welcome-farm.webp")}
+          alt="Eight colorful Mosslings farm a sunny garden beside the huge stump they live in. A shabby wooden door stands open for one to bounce through, with a four-pane window on each side and smoke rising from the chimney, while the others tend little carrot rows."
           width={864}
           height={1152}
           sizes="(max-width: 700px) 94vw, 480px"
@@ -140,7 +141,7 @@ export function WelcomeSplash({
         />
         <Image
           className="welcome-logo"
-          src="/mosslings/logo-welcome.png"
+          src={mosslingsPublicAsset("/mosslings/logo-welcome.png")}
           alt="Mosslings — Small genetic wonders"
           width={1250}
           height={394}

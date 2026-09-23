@@ -6,6 +6,7 @@ type PortraitName =
   | "treeHurt"
   | "grass"
   | "dirt"
+  | "sand"
   | "rock"
   | "water"
   | "cropSown"
@@ -21,6 +22,7 @@ const FILE: Record<PortraitName, string> = {
   treeHurt: "tree-hurt",
   grass: "grass",
   dirt: "dirt",
+  sand: "sand",
   rock: "rock",
   water: "water",
   cropSown: "crop-sown",
@@ -68,6 +70,8 @@ function portraitFor(
       return { name: "rock", label: "Pixel-art picture of rock" };
     case "dirt":
       return { name: "dirt", label: "Pixel-art picture of dirt" };
+    case "sand":
+      return { name: "sand", label: "Pixel-art picture of sand" };
     case "grass":
       return { name: "grass", label: "Pixel-art picture of grass and moss" };
   }

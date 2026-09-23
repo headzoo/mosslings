@@ -1,7 +1,8 @@
-import { MONTH_SECONDS } from "./game-time";
+import { CHASE_PLAY_SECONDS } from "./chase";
+import { MONTH_SECONDS, type Season } from "./game-time";
 import { addToBucket, eachInReach } from "./god/shared";
 import type { Camera } from "./map-camera";
-import type { PreviewMossling, SoccerGame } from "./map-preview";
+import type { PlayKind, PreviewMossling, SoccerGame } from "./map-preview";
 import {
   KICK_FRAME_COUNT,
   KICK_SECONDS,
@@ -18,6 +19,32 @@ export const SOCCER_REACH = 2;
 export const SOCCER_CHANCE = 0.2;
 /** How long a pair keeps kicking once play begins. */
 export const SOCCER_PLAY_SECONDS = MONTH_SECONDS * 2;
+/** Games a new pair can roll. Later games join this list. */
+export const PLAY_KINDS = [
+  "soccer",
+  "chase",
+  "snowball",
+] as const satisfies readonly PlayKind[];
+
+/** Snowballs join the roll only in winter. Other seasons keep the rest of the list. */
+export function gamesThisSeason(season: Season): readonly PlayKind[] {
+  if (season === "Winter") return PLAY_KINDS;
+  return PLAY_KINDS.filter((kind) => kind !== "snowball");
+}
+
+/**
+ * Equal odds across the games this season allows.
+ * Zero stays soccer, so a constant zero roll does too.
+ */
+export function rollPlayKind(
+  random: () => number,
+  season: Season = "Summer",
+): PlayKind {
+  const games = gamesThisSeason(season);
+  const index = Math.min(games.length - 1, Math.floor(random() * games.length));
+  return games[index] ?? "soccer";
+}
+
 /** Strike pose in the six-frame kick: plant, lift, kick, follow, recover, rest. */
 export const KICK_STRIKE = 2;
 /** Tiles from a player's center to the foot the ball leaves. */
@@ -33,6 +60,13 @@ export const SOCCER_BALL_ROWS = [
   ".bwb.",
 ] as const;
 
+/** Panel color. A snowball keeps every panel and paints it white. */
+export function ballFill(mark: string, snow: boolean): string | null {
+  if (mark !== "b" && mark !== "w") return null;
+  if (snow || mark === "w") return SOCCER_BALL_WHITE;
+  return SOCCER_BALL_INK;
+}
+
 export interface SoccerMonthInput {
   mosslings: PreviewMossling[];
   width: number;
@@ -40,6 +74,8 @@ export interface SoccerMonthInput {
   random: () => number;
   isPanicked: (id: number) => boolean;
   busy: ReadonlySet<number>;
+  /** Missing means summer, so a snowball is not on offer. */
+  season?: Season;
   canMoveTo: (mossling: PreviewMossling, x: number, y: number) => boolean;
   move: (mossling: PreviewMossling, x: number, y: number) => void;
 }
@@ -49,6 +85,8 @@ export interface BallMark {
   x: number;
   y: number;
   size: number;
+  /** A snowball keeps the soccer shape and drops the dark panels. */
+  snow?: boolean;
 }
 
 const alive = (
@@ -127,13 +165,16 @@ function writeGame(
   width: number,
   phase: SoccerGame["phase"],
   since: number,
+  random: () => number,
+  season: Season,
 ) {
   const faces = soccerFaces(
     { id: a.id, ...cellPos(a.cellIndex, width) },
     { id: b.id, ...cellPos(b.cellIndex, width) },
   );
-  a.soccer = { partnerId: b.id, since, face: faces.a, phase };
-  b.soccer = { partnerId: a.id, since, face: faces.b, phase };
+  const kind = a.soccer?.kind ?? b.soccer?.kind ?? rollPlayKind(random, season);
+  a.soccer = { partnerId: b.id, since, face: faces.a, phase, kind };
+  b.soccer = { partnerId: a.id, since, face: faces.b, phase, kind };
 }
 
 /**
@@ -146,9 +187,17 @@ function pursue(
   input: SoccerMonthInput,
 ): boolean {
   const { width, elapsed, random, canMoveTo, move } = input;
+  const season = input.season ?? "Summer";
+  if (a.soccer?.kind === "snowball" && season !== "Winter") {
+    clearGame(a);
+    clearGame(b);
+    return false;
+  }
   const phase = a.soccer?.phase ?? "play";
   if (phase === "play") {
-    if (elapsed >= (a.soccer?.since ?? 0) + SOCCER_PLAY_SECONDS) {
+    const limit =
+      a.soccer?.kind === "chase" ? CHASE_PLAY_SECONDS : SOCCER_PLAY_SECONDS;
+    if (elapsed >= (a.soccer?.since ?? 0) + limit) {
       clearGame(a);
       clearGame(b);
       return false;
@@ -178,10 +227,10 @@ function pursue(
     return false;
   }
   if (distance <= SOCCER_REACH) {
-    writeGame(a, b, width, "play", elapsed);
+    writeGame(a, b, width, "play", elapsed, random, season);
     return true;
   }
-  writeGame(a, b, width, "approach", a.soccer?.since ?? 0);
+  writeGame(a, b, width, "approach", a.soccer?.since ?? 0, random, season);
   return true;
 }
 
@@ -191,6 +240,7 @@ function pursue(
  */
 export function soccerMonth(input: SoccerMonthInput): Set<number> {
   const { mosslings, width, elapsed, random, isPanicked, busy } = input;
+  const season = input.season ?? "Summer";
   const playing = new Set<number>();
   const byId = new Map(mosslings.map((mossling) => [mossling.id, mossling]));
 
@@ -249,8 +299,8 @@ export function soccerMonth(input: SoccerMonthInput): Set<number> {
     if (!originA || !originB) continue;
     const distance = chebyshev(originA, originB);
     if (distance <= SOCCER_REACH)
-      writeGame(pair.a, pair.b, width, "play", elapsed);
-    else writeGame(pair.a, pair.b, width, "approach", 0);
+      writeGame(pair.a, pair.b, width, "play", elapsed, random, season);
+    else writeGame(pair.a, pair.b, width, "approach", 0, random, season);
     if (!pursue(pair.a, pair.b, input)) continue;
     joined.add(pair.a.id);
     joined.add(pair.b.id);
@@ -319,6 +369,9 @@ export function playingSoccer(
 ): boolean {
   const game = mossling.soccer;
   if (!game || !alive(mossling) || !alive(partner)) return false;
+  const kind = game.kind ?? "soccer";
+  if (kind !== "soccer" && kind !== "snowball") return false;
+  if ((partner.soccer?.kind ?? "soccer") !== kind) return false;
   if (game.phase !== "play" || partner.soccer?.phase !== "play") return false;
   if (
     partner.soccer?.partnerId !== mossling.id ||
@@ -380,7 +433,12 @@ export function ballsInView(
       mosslingInView(partner.cellIndex, mapWidth, camera) ||
       inCamera(point.x, point.y, camera);
     if (!visible) continue;
-    marks.push({ x: point.x, y: point.y, size: ballSize(tileSize) });
+    marks.push({
+      x: point.x,
+      y: point.y,
+      size: ballSize(tileSize),
+      snow: game.kind === "snowball",
+    });
   }
   return marks;
 }

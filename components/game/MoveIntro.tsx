@@ -106,11 +106,9 @@ export function MoveIntro({ anchorRef, onDismiss }: MoveIntroProps) {
       <div className="mossling-intro-copy mossling-intro-copy--move">
         <h2 id="move-intro-title">Map controls</h2>
         <p>
-          The pointer is your default tool — click tiles to inspect the world.
-          Use the magnifying glasses to zoom in or out on a spot: select one,
-          then click the map. When you&apos;re zoomed in, the hand lets you drag
-          the map around. Click the pointer, click the same tool again, click
-          outside the map, or zoom all the way out to go back to inspecting.
+          The pointer inspects tiles. Select a magnifying glass, then click the
+          map to zoom. When zoomed in, the hand drags the map. Click the
+          pointer again to go back to inspecting.
         </p>
         <button type="button" onClick={onDismiss}>
           Got it

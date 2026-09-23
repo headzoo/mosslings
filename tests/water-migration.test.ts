@@ -145,6 +145,34 @@ test("autumn steps a swimmer back onto land", () => {
   assert.equal((world.mosslings[0]?.health ?? 0) > 0, true);
 });
 
+test("a flood does not drown a swimmer", () => {
+  const map = fixture();
+  const world = new GodWorld(map, [mossling(5, 5, 90)]);
+  world.map.cells[at(5, 5)].terrain = "water";
+  world.tick(0.05);
+  assert.equal(world.mosslings[0]?.health, 100);
+  assert.equal(
+    world.events.some((event) => event.message.includes("drowned")),
+    false,
+  );
+});
+
+test("rain across the autumn turn does not drown a swimmer", () => {
+  const map = fixture();
+  water(map, 5, 5);
+  feed(map, 12);
+  const world = new GodWorld(map, [mossling(5, 5, 90)]);
+  world.cast("rain", 5, 5);
+  world.advanceTo(SEASON_SECONDS);
+  assert.equal((world.mosslings[0]?.health ?? 0) > 0, true);
+  assert.equal(world.mosslings[0]?.cellIndex, at(6, 5));
+  assert.equal(world.map.cells[at(6, 5)]?.terrain, "grass");
+  assert.equal(
+    world.events.some((event) => event.message.includes("drowned")),
+    false,
+  );
+});
+
 test("a shove still drowns a swimmer, and low tolerance drowns on the water", () => {
   const shoved = fixture();
   water(shoved, 6, 5);

@@ -169,6 +169,8 @@ test("one god cloud does not flood, and three overlapping clouds do", () => {
   );
 
   const soaked = new GodWorld(fixture(12, 12), [mossling(6 * 12 + 6)]);
+  for (const trait of soaked.mosslings[0]?.traits ?? [])
+    if (trait.label === "Water tolerance") trait.value = 20;
   soaked.map.cells[6 * 12 + 7].terrain = "rock";
   soaked.map.cells[7 * 12 + 6].tree = { health: 100 };
   soaked.cast("rain", 6, 6);

@@ -14,6 +14,7 @@ import {
 export const TERRAIN_DETAIL_ZOOM = 24;
 
 const SOILS = [0x6b4a2a, 0x7a5530, 0x5c4030, 0x8a6240] as const;
+const SANDS = [0xe6d2a2, 0xd4bc84, 0xf0e0b8, 0xc8ae74, 0xefe2c0] as const;
 const LEAVES = [0x3d9a34, 0x54a32e, 0x2f7a28] as const;
 const CARROT = 0xe87820;
 const CARROT_TIP = 0xc44818;
@@ -57,7 +58,7 @@ export function terrainDetailActive(tileSize: number): boolean {
   return tileSize >= TERRAIN_DETAIL_ZOOM;
 }
 
-/** Crops, grass, trees, open water, rock, and any land with snow. Fire and scars stay on the base map. */
+/** Crops, grass, sand, trees, open water, rock, and any land with snow. Fire and scars stay on the base map. */
 export function cellNeedsTerrainDetail(
   map: MapData,
   index: number,
@@ -68,6 +69,7 @@ export function cellNeedsTerrainDetail(
   if (cell.tree || cell.growth !== undefined) return true;
   if (
     cell.terrain === "grass" ||
+    cell.terrain === "sand" ||
     cell.terrain === "water" ||
     cell.terrain === "rock"
   )
@@ -156,6 +158,14 @@ function scalePacked(rgb: number, factor: number) {
 
 function soilColor(index: number, x: number, y: number) {
   return SOILS[hashAt(index, x, y) % SOILS.length] ?? SOILS[0];
+}
+
+function sandPixel(index: number, x: number, y: number) {
+  const hash = hashAt(index, x, y);
+  const grain = SANDS[hash % SANDS.length] ?? SANDS[0];
+  if (hash % 17 === 0) return scalePacked(grain, 0.82);
+  if (hash % 13 === 0) return scalePacked(grain, 1.08);
+  return grain;
 }
 
 /** True on the highlight line of a ripple. Three lines fit in a 24px tile. */
@@ -374,6 +384,7 @@ function groundUnderTree(
   if (paint.bare.terrain === "grass")
     return grassPixel(index, paint.bare, x, y, look, paint.grassBase);
   if (paint.bare.terrain === "dirt") return soilColor(index, x, y);
+  if (paint.bare.terrain === "sand") return sandPixel(index, x, y);
   return paint.groundBase;
 }
 
@@ -479,6 +490,8 @@ function terrainRgb(
     );
   if (cell.terrain === "dirt")
     return laySnow(index, x, y, paint.snow, soilColor(index, x, y));
+  if (cell.terrain === "sand")
+    return laySnow(index, x, y, paint.snow, sandPixel(index, x, y));
   return laySnow(
     index,
     x,

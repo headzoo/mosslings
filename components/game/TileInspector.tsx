@@ -38,6 +38,11 @@ const terrainInfo = {
     description:
       "Water gathers in this low patch of ground. A cool, wet interruption in the landscape, separating the dry land around it. Late autumn skins it with ice, and the ice melts through spring.",
   },
+  sand: {
+    title: "Sand",
+    description:
+      "Fine pale grains gather where the water meets the land. The beach reaches a tile or two inland, and little will grow in it.",
+  },
 };
 const cropInfo = {
   title: "Carrots",
@@ -247,7 +252,12 @@ export function TileInspector({
                 {(mossling.panic ?? 0) > 0.1 &&
                   " · Panicked — trying to escape"}
                 {mossling.ritual?.phase === "courtship" && " · Courting"}
-                {mossling.soccer?.phase === "play" && " · Playing soccer"}
+                {mossling.soccer?.phase === "play" &&
+                  (mossling.soccer.kind === "chase"
+                    ? " · Playing chase"
+                    : mossling.soccer.kind === "snowball"
+                      ? " · Throwing snowballs"
+                      : " · Playing soccer")}
                 {mossling.ritual?.phase === "family" &&
                   " · Staying with family"}
                 {mossling.lastMatedAt != null &&

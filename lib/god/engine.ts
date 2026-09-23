@@ -25,12 +25,7 @@ import {
 } from "../resource-history";
 import { soccerMonth } from "../soccer";
 import { advanceVegetation } from "../vegetation";
-import {
-  landExit,
-  nearestShore,
-  shoreMigrant,
-  swims,
-} from "../water-migration";
+import { landExit, nearestShore, shoreMigrant } from "../water-migration";
 import { countWorldResources, type WorldResources } from "../world-resources";
 import { GOD_ACTIONS } from "./actions";
 import { DisasterAvoidance } from "./avoidance";
@@ -484,7 +479,8 @@ export class GodWorld {
       if (
         (m.health ?? 100) > 0 &&
         this.map.cells[m.cellIndex]?.terrain === "water" &&
-        !swims(m.traits, gameDateAt(this.elapsed).season)
+        // Season is not the test: rain ticks into autumn before wander can step ashore.
+        !shoreMigrant(m.traits)
       ) {
         m.health = 0;
         this.drowned.add(m.id);
@@ -824,6 +820,7 @@ export class GodWorld {
       random: () => this.random(),
       isPanicked: (id) => this.avoidance.isPanicked(id),
       busy,
+      season: gameDateAt(this.elapsed).season,
       canMoveTo: (m, x, y) => this.context.canMoveTo(m, x, y),
       move: (m, x, y) => this.context.move(m, x, y),
     });

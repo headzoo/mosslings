@@ -1,6 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useRef } from "react";
+import { chasePlace } from "@/lib/chase";
 import {
   ASCENT_SECONDS,
   buildDiedSpriteSheet,
@@ -40,6 +41,19 @@ import {
   terrainDetailActive,
 } from "@/lib/terrain-detail";
 import type { FramePainter } from "./useGodWorld";
+
+function tileOriginInView(
+  x: number,
+  y: number,
+  camera: Pick<Camera, "x" | "y" | "width" | "height">,
+) {
+  return (
+    x < camera.x + camera.width &&
+    x + 1 > camera.x &&
+    y < camera.y + camera.height &&
+    y + 1 > camera.y
+  );
+}
 
 const SHEET_LIMIT = 256;
 
@@ -277,16 +291,36 @@ export function MosslingDetail({
         if (!seen.has(id)) wasAlive.delete(id);
       }
       for (const mossling of mosslingsRef.current) {
-        if (!mosslingInView(mossling.cellIndex, current.width, camera))
-          continue;
         const cellX = mossling.cellIndex % current.width;
         const cellY = Math.floor(mossling.cellIndex / current.width);
-        const px = camera.left + cellX * size;
-        const py = camera.top + cellY * size;
+        const health = mossling.health ?? 100;
+        const game = mossling.soccer;
+        const partner = game ? byId.get(game.partnerId) : undefined;
+        const burning =
+          mode === "sprite" &&
+          health > 0 &&
+          touchesFire(current, mossling.cellIndex);
+        const chase =
+          health > 0 && !burning
+            ? chasePlace(mossling, partner, current.width, elapsedNow)
+            : null;
+        const homeVisible = mosslingInView(
+          mossling.cellIndex,
+          current.width,
+          camera,
+        );
+        const chaseVisible = chase
+          ? tileOriginInView(chase.x, chase.y, camera)
+          : false;
+        if (!homeVisible && !chaseVisible) continue;
+        const homePx = camera.left + cellX * size;
+        const homePy = camera.top + cellY * size;
+        const px = chase ? camera.left + chase.x * size : homePx;
+        const py = chase ? camera.top + chase.y * size : homePy;
         const detailed =
           terrainDetailActive(size) &&
           cellNeedsTerrainDetail(current, mossling.cellIndex, look);
-        if (!detailed) {
+        if (homeVisible && !detailed) {
           terrainContext.setTransform(1, 0, 0, 1, 0, 0);
           terrainContext.clearRect(0, 0, TILE_SIZE, TILE_SIZE);
           terrainContext.setTransform(
@@ -311,8 +345,8 @@ export function MosslingDetail({
             0,
             TILE_SIZE,
             TILE_SIZE,
-            px,
-            py,
+            homePx,
+            homePy,
             size,
             size,
           );
@@ -327,28 +361,24 @@ export function MosslingDetail({
               )
             : 0;
         const cell = current.cells[mossling.cellIndex];
-        const health = mossling.health ?? 100;
-        const game = mossling.soccer;
-        const partner = game ? byId.get(game.partnerId) : undefined;
-        const burning =
-          mode === "sprite" &&
-          health > 0 &&
-          touchesFire(current, mossling.cellIndex);
         const kicking =
           mode === "sprite" &&
           health > 0 &&
           !burning &&
+          !chase &&
           playingSoccer(mossling, partner, current.width);
         const splashing =
           mode === "sprite" &&
           health > 0 &&
           !burning &&
+          !chase &&
           !kicking &&
           cell?.terrain === "water";
         const digging =
           mode === "sprite" &&
           health > 0 &&
           !burning &&
+          !chase &&
           !kicking &&
           !splashing &&
           pullingCarrots(season, cell);
@@ -356,6 +386,7 @@ export function MosslingDetail({
           mode === "sprite" &&
           health > 0 &&
           !burning &&
+          !chase &&
           !kicking &&
           !splashing &&
           !digging &&
@@ -423,6 +454,22 @@ export function MosslingDetail({
             size,
             size,
           );
+        } else if (bitmap && bounce !== null && chase?.face === "left") {
+          context.save();
+          context.translate(px + size, 0);
+          context.scale(-1, 1);
+          context.drawImage(
+            bitmap,
+            0,
+            bounce * SPRITE_SIZE,
+            SPRITE_SIZE,
+            SPRITE_SIZE,
+            0,
+            top,
+            size,
+            size,
+          );
+          context.restore();
         } else if (bitmap && bounce !== null) {
           context.drawImage(
             bitmap,

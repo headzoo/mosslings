@@ -31,6 +31,7 @@ export const raze: GodAction = {
       return "Carrots need ground or forest, not water.";
     if (cell?.terrain === "rock")
       return "Carrots need ground or forest, not stone.";
+    if (cell?.terrain === "sand") return "Carrots will not grow in sand.";
     if (cell && (cell.terrain === "grass" || cell.terrain === "dirt"))
       return null;
     return "Choose a forest or ground tile for carrots.";

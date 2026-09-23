@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 
-export type IntroPhase = "mosslings" | "species" | "powers" | "world";
+export type IntroPhase = "mosslings" | "species" | "map" | "powers" | "world";
 
 export type IntroSpotlight = {
   x: number;
@@ -143,13 +143,9 @@ export function MosslingIntro({
           <>
             <h2 id="mossling-intro-mosslings-title">These are Mosslings.</h2>
             <p>
-              These 8x8 colorful little circles are your Mosslings. They come in
-              all different colors based on their genetics — patterns, shades,
-              and traits passed down from their parents.
-              <br />
-              <br />
-              Each one is a unique species. Watch them wander, find mates, and
-              adapt to the world you shape. Take care of them.
+              These colorful circles are your Mosslings. Genetics give each one
+              its own look. Watch them wander, find mates, and take care of
+              them.
             </p>
           </>
         )}
@@ -157,9 +153,8 @@ export function MosslingIntro({
           <>
             <h2 id="mossling-intro-species-title">This is the species list.</h2>
             <p>
-              Mosslings that look alike or share close ancestry belong to one
-              species. Each species gets a unique name and shows how many
-              Mosslings belong to it. Click a species to find them on the map.
+              Lookalikes and close relatives share a species, with its own name
+              and count. Click one to find them on the map.
             </p>
           </>
         )}
@@ -167,10 +162,8 @@ export function MosslingIntro({
           <>
             <h2 id="mossling-intro-powers-title">These are your god powers.</h2>
             <p>
-              Choose a power from the rail, then click tiles on the map to use
-              it. Bring rain, sunlight, and carrots to help your Mosslings — or
-              unleash fire, disease, and disasters to see how they cope. Press
-              Esc to cancel a selected power.
+              Pick a power, then click the map. Rain, sun, and carrots help
+              your Mosslings; fire and disasters test them. Esc cancels.
             </p>
           </>
         )}
@@ -180,10 +173,8 @@ export function MosslingIntro({
               And this is the Mossling world.
             </h2>
             <p>
-              It has rivers, trees, grass, and natural disasters. Mosslings roam
-              across it, foraging for food, raising families, and weathering
-              whatever you send their way. Bring rain, plant carrots, or call
-              down fire and see how the land — and its little inhabitants —
+              Rivers, trees, grass, and disasters fill the land. Mosslings roam,
+              forage, and raise families. Send rain or fire and see how they
               respond.
             </p>
           </>

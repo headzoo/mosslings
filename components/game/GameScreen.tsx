@@ -26,6 +26,7 @@ import {
 import type { MapCell, MapData } from "@/lib/map";
 import { type Camera, getCamera, zoomAtPoint } from "@/lib/map-camera";
 import type { PreviewMossling } from "@/lib/map-preview";
+import { mosslingsPublicAsset } from "@/lib/public-asset";
 import {
   mapToolFromKeyboard,
   shouldIgnoreMapToolShortcut,
@@ -40,6 +41,7 @@ import {
 } from "@/lib/species";
 import { speciesName } from "@/lib/species-name";
 import { terrainDetailActive } from "@/lib/terrain-detail";
+import { ChatterBubbles } from "./ChatterBubbles";
 import { CoughBubbles } from "./CoughBubbles";
 import { CropIntro } from "./CropIntro";
 import { CurseBubbles } from "./CurseBubbles";
@@ -49,6 +51,7 @@ import { GodControls } from "./GodControls";
 import { GodEffects } from "./GodEffects";
 import { Health } from "./Health";
 import { Kites } from "./Kites";
+import { LolBubbles } from "./LolBubbles";
 import {
   ExtinctionModal,
   LoreBoard,
@@ -62,6 +65,7 @@ import { MoveIntro } from "./MoveIntro";
 import { Pollinators } from "./Pollinators";
 import { ScreenshotModal } from "./ScreenshotModal";
 import { SeasonDim } from "./SeasonDim";
+import { SkyBirds } from "./SkyBirds";
 import { SkyClouds } from "./SkyClouds";
 import { SoccerBall } from "./SoccerBall";
 import { SpeciesList } from "./SpeciesList";
@@ -76,6 +80,7 @@ import {
   rememberCropIntroDismissal,
   rememberMoveIntroDismissal,
 } from "./WelcomeSplash";
+import { WhistleNotes } from "./WhistleNotes";
 import { type MapTool, ZoomControls } from "./ZoomControls";
 
 type TileSelection = {
@@ -365,6 +370,7 @@ export function GameScreen({
     const introZoomed =
       introPhase === "mosslings" ||
       introPhase === "species" ||
+      introPhase === "map" ||
       introPhase === "powers";
     const targetCenter = introZoomed ? introClusterCenter(map) : DEFAULT_CENTER;
     const targetTileSize = introZoomed ? INTRO_TILE_SIZE : DEFAULT_TILE_SIZE;
@@ -644,7 +650,7 @@ export function GameScreen({
         <div className="brand">
           <Image
             className="brand-logo"
-            src="/mosslings/logo-header-lg.png"
+            src={mosslingsPublicAsset("/mosslings/logo-header-lg.png")}
             width={1271}
             height={430}
             sizes="(max-width: 620px) 203px, (max-width: 900px) 225px, (max-width: 1300px) 234px, 302px"
@@ -990,6 +996,18 @@ export function GameScreen({
                 subscribeFrame={subscribeFrame}
               />
             )}
+            {map && camera && tileSize >= SPRITE_ZOOM && (
+              <WhistleNotes
+                map={map}
+                mosslings={mosslings}
+                cameraRef={cameraRef}
+                tileSize={tileSize}
+                width={viewport.width}
+                height={viewport.height}
+                elapsed={gameTime.getElapsed}
+                subscribeFrame={subscribeFrame}
+              />
+            )}
             {map &&
               camera &&
               mosslings.length > 0 &&
@@ -1070,6 +1088,30 @@ export function GameScreen({
                 subscribeFrame={subscribeFrame}
               />
             )}
+            {map && camera && (
+              <LolBubbles
+                map={map}
+                mosslings={mosslings}
+                cameraRef={cameraRef}
+                tileSize={tileSize}
+                width={viewport.width}
+                height={viewport.height}
+                elapsed={gameTime.getElapsed}
+                subscribeFrame={subscribeFrame}
+              />
+            )}
+            {map && camera && (
+              <ChatterBubbles
+                map={map}
+                mosslings={mosslings}
+                cameraRef={cameraRef}
+                tileSize={tileSize}
+                width={viewport.width}
+                height={viewport.height}
+                elapsed={gameTime.getElapsed}
+                subscribeFrame={subscribeFrame}
+              />
+            )}
             {engine && camera && (
               <CurseBubbles
                 engine={engine}
@@ -1083,6 +1125,19 @@ export function GameScreen({
             )}
             {map && camera && (
               <SkyClouds
+                seed={map.seed}
+                mapWidth={map.width}
+                mapHeight={map.height}
+                cameraRef={cameraRef}
+                tileSize={tileSize}
+                width={viewport.width}
+                height={viewport.height}
+                elapsed={gameTime.getElapsed}
+                subscribeFrame={subscribeFrame}
+              />
+            )}
+            {map && camera && (
+              <SkyBirds
                 seed={map.seed}
                 mapWidth={map.width}
                 mapHeight={map.height}
@@ -1184,22 +1239,25 @@ export function GameScreen({
                 }}
               />
             )}
-            {mapControlsIntroOpen && (
+            {(mapControlsIntroOpen || introPhase === "map") && (
               <MoveIntro
                 anchorRef={zoomControlsRef}
                 onDismiss={() => {
+                  mapControlsIntroTriggered.current = true;
                   try {
                     rememberMoveIntroDismissal();
                   } catch {
                     // Best-effort preference; still close the callout.
                   }
                   setMapControlsIntroOpen(false);
+                  if (introPhase === "map") onIntroContinue?.();
                 }}
               />
             )}
             {introPhase &&
               introPhase !== "species" &&
               introPhase !== "powers" &&
+              introPhase !== "map" &&
               onIntroContinue && (
                 <MosslingIntro
                   phase={introPhase}

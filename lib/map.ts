@@ -10,6 +10,7 @@
  *   2. Terrain classification into water / grass / dirt / rock.
  *   3. A small majority-neighbor smoothing pass.
  *   4. Optional meandering rivers carved after smoothing.
+ *   5. Sand beaches along the finished shoreline.
  *
  * Supplying the same width, height, seed, and options returns the same map.
  */
@@ -18,6 +19,7 @@ export const TerrainKind = {
   Grass: "grass",
   Dirt: "dirt",
   Rock: "rock",
+  Sand: "sand",
 } as const;
 
 export type TerrainKind = (typeof TerrainKind)[keyof typeof TerrainKind];
@@ -263,6 +265,8 @@ export function generateMap(
     const riverOptions = options.rivers ?? {};
     cells = carveRivers(cells, width, height, seed, waterLevel, riverOptions);
   }
+
+  cells = layBeaches(cells, width, height, seed);
 
   return {
     width,
@@ -611,6 +615,463 @@ function paintWater(
       };
     }
   }
+}
+
+/**
+ * Beaches sit on finished shores, after smoothing and rivers.
+ * A run is 3–25 shore tiles, one or two cells deep, skewed toward the short end.
+ */
+const BEACH_MIN = 3;
+const BEACH_MAX = 25;
+const SAND_FERTILITY = 0.12;
+const SHORE_STEPS = [
+  [0, -1],
+  [1, 0],
+  [0, 1],
+  [-1, 0],
+] as const;
+
+function layBeaches(
+  cells: MapCell[],
+  width: number,
+  height: number,
+  seed: number,
+): MapCell[] {
+  const next = cells.slice();
+  const rng = mulberry32(mix32(seed ^ 0x5a4d0e17));
+  const shore = shoreCells(next, width, height);
+  const sand = new Set<number>();
+
+  for (const walk of shoreWalks(shore, width, height)) {
+    const order =
+      walk.cyclic && walk.order.length > BEACH_MAX
+        ? walk.order.slice(0, -1)
+        : walk.order;
+    paintShoreRuns(order, rng, sand);
+  }
+
+  limitBeachRuns(sand, width, height);
+
+  for (const run of shoreComponents(sand, width, height)) {
+    const depth = rng() < 0.5 ? 1 : 2;
+    for (const index of run) paintSand(next, index);
+    if (depth === 1) continue;
+    for (const index of run) {
+      const inland = inlandFromShore(next, index, width, height, shore);
+      if (inland !== null) paintSand(next, inland);
+    }
+  }
+
+  return next;
+}
+
+function paintSand(cells: MapCell[], index: number) {
+  const current = cells[index];
+  if (!current || current.terrain === TerrainKind.Water) return;
+  cells[index] = {
+    ...current,
+    terrain: TerrainKind.Sand,
+    fertility: SAND_FERTILITY,
+  };
+}
+
+function shoreCells(
+  cells: MapCell[],
+  width: number,
+  height: number,
+): Set<number> {
+  const shore = new Set<number>();
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const index = indexOf(x, y, width);
+      if (cells[index]?.terrain === TerrainKind.Water) continue;
+
+      for (const [dx, dy] of SHORE_STEPS) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+        if (cells[indexOf(nx, ny, width)]?.terrain !== TerrainKind.Water) {
+          continue;
+        }
+        shore.add(index);
+        break;
+      }
+    }
+  }
+
+  return shore;
+}
+
+function shoreWalks(
+  shore: Set<number>,
+  width: number,
+  height: number,
+): Array<{ order: number[]; cyclic: boolean }> {
+  const remaining = new Set(shore);
+  const walks: Array<{ order: number[]; cyclic: boolean }> = [];
+
+  while (remaining.size > 0) {
+    const start = shoreEndpoint(remaining, width, height);
+    const forward = [start];
+    remaining.delete(start);
+    extendShore(forward, remaining, width, height);
+    const backward = [start];
+    extendShore(backward, remaining, width, height);
+    const order = [...backward.slice(1).reverse(), ...forward];
+    const last = order[order.length - 1] ?? start;
+    walks.push({
+      order,
+      cyclic: order.length > 2 && cardinalTouch(order[0] ?? start, last, width),
+    });
+  }
+
+  return walks;
+}
+
+function shoreEndpoint(
+  remaining: Set<number>,
+  width: number,
+  height: number,
+): number {
+  let best = -1;
+  let bestDegree = 5;
+
+  for (const index of remaining) {
+    const degree = linkedShore(index, remaining, width, height).length;
+    if (degree < bestDegree) {
+      best = index;
+      bestDegree = degree;
+      if (degree <= 1) break;
+    }
+  }
+
+  return best;
+}
+
+function extendShore(
+  walk: number[],
+  remaining: Set<number>,
+  width: number,
+  height: number,
+) {
+  for (let guard = remaining.size; guard > 0; guard--) {
+    const current = walk[walk.length - 1];
+    if (current === undefined) return;
+    const previous = walk.length > 1 ? walk[walk.length - 2] : -1;
+    const options = linkedShore(current, remaining, width, height);
+    if (options.length === 0) return;
+
+    let next = options[0];
+    if (previous !== undefined && previous >= 0 && options.length > 1) {
+      const straight = options.find((candidate) =>
+        continuesStraight(previous, current, candidate, width),
+      );
+      if (straight !== undefined) next = straight;
+    }
+    if (next === undefined) return;
+    walk.push(next);
+    remaining.delete(next);
+  }
+}
+
+function continuesStraight(
+  previous: number,
+  current: number,
+  next: number,
+  width: number,
+): boolean {
+  const px = previous % width;
+  const py = Math.floor(previous / width);
+  const cx = current % width;
+  const cy = Math.floor(current / width);
+  const nx = next % width;
+  const ny = Math.floor(next / width);
+  return nx - cx === cx - px && ny - cy === cy - py;
+}
+
+function cardinalTouch(a: number, b: number, width: number): boolean {
+  const ax = a % width;
+  const ay = Math.floor(a / width);
+  const bx = b % width;
+  const by = Math.floor(b / width);
+  return Math.abs(ax - bx) + Math.abs(ay - by) === 1;
+}
+
+function linkedShore(
+  index: number,
+  cells: Set<number>,
+  width: number,
+  height: number,
+): number[] {
+  const x = index % width;
+  const y = Math.floor(index / width);
+  const linked: number[] = [];
+
+  for (const [dx, dy] of SHORE_STEPS) {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+    const neighbor = indexOf(nx, ny, width);
+    if (cells.has(neighbor)) linked.push(neighbor);
+  }
+
+  return linked;
+}
+
+/** Short runs are common; a few stretches reach the mid-twenties. */
+function paintShoreRuns(order: number[], rng: () => number, sand: Set<number>) {
+  const count = order.length;
+  if (count < BEACH_MIN) return;
+
+  let cursor = 0;
+  while (cursor < count) {
+    const remaining = count - cursor;
+    if (remaining < BEACH_MIN) return;
+
+    let run = BEACH_MIN + Math.floor(rng() ** 2 * (BEACH_MAX - BEACH_MIN + 1));
+    run = Math.min(run, remaining);
+    if (remaining > run) run = Math.min(run, remaining - 1);
+    if (run < BEACH_MIN) return;
+
+    for (let offset = 0; offset < run; offset++) {
+      const index = order[cursor + offset];
+      if (index !== undefined) sand.add(index);
+    }
+
+    cursor += run;
+    cursor += 1 + Math.floor(rng() * 4);
+  }
+}
+
+function limitBeachRuns(sand: Set<number>, width: number, height: number) {
+  for (let guard = sand.size; guard > 0; guard--) {
+    let changed = false;
+
+    for (const component of shoreComponents(sand, width, height)) {
+      if (component.length < BEACH_MIN) {
+        for (const index of component) sand.delete(index);
+        changed = true;
+      } else if (component.length > BEACH_MAX) {
+        sand.delete(beachCut(component, width, height));
+        changed = true;
+      }
+    }
+
+    if (!changed) return;
+  }
+}
+
+function shoreComponents(
+  cells: Set<number>,
+  width: number,
+  height: number,
+): number[][] {
+  const seen = new Set<number>();
+  const components: number[][] = [];
+
+  for (const start of cells) {
+    if (seen.has(start)) continue;
+    const component: number[] = [];
+    const queue = [start];
+    seen.add(start);
+
+    while (queue.length > 0) {
+      const current = queue.pop();
+      if (current === undefined) break;
+      component.push(current);
+      for (const neighbor of linkedShore(current, cells, width, height)) {
+        if (seen.has(neighbor)) continue;
+        seen.add(neighbor);
+        queue.push(neighbor);
+      }
+    }
+
+    components.push(component);
+  }
+
+  return components;
+}
+
+function beachCut(component: number[], width: number, height: number): number {
+  const cells = new Set(component);
+  let start = component[0] ?? 0;
+  let lowest = 5;
+
+  for (const index of component) {
+    const degree = linkedShore(index, cells, width, height).length;
+    if (degree < lowest) {
+      lowest = degree;
+      start = index;
+    }
+  }
+
+  const distance = new Map<number, number>();
+  const parent = new Map<number, number>();
+  const queue = [start];
+  distance.set(start, 0);
+  let far = start;
+
+  for (let cursor = 0; cursor < queue.length; cursor++) {
+    const current = queue[cursor];
+    if (current === undefined) break;
+    if ((distance.get(current) ?? 0) > (distance.get(far) ?? 0)) far = current;
+    for (const neighbor of linkedShore(current, cells, width, height)) {
+      if (distance.has(neighbor)) continue;
+      distance.set(neighbor, (distance.get(current) ?? 0) + 1);
+      parent.set(neighbor, current);
+      queue.push(neighbor);
+    }
+  }
+
+  const path: number[] = [];
+  for (
+    let current: number | undefined = far;
+    current !== undefined;
+    current = parent.get(current)
+  ) {
+    path.push(current);
+  }
+
+  const length = path.length;
+  let bestIndex = Math.min(BEACH_MAX, Math.max(0, length - 1));
+  let bestScore = Number.POSITIVE_INFINITY;
+
+  for (let cut = 1; cut < length - 1; cut++) {
+    const left = cut;
+    const right = length - 1 - cut;
+    const oversized = (left > BEACH_MAX ? 1 : 0) + (right > BEACH_MAX ? 1 : 0);
+    const tiny = (left < BEACH_MIN ? 1 : 0) + (right < BEACH_MIN ? 1 : 0);
+    const score = oversized * 1000 + tiny * 100 + Math.max(left, right);
+    if (score < bestScore) {
+      bestScore = score;
+      bestIndex = cut;
+    }
+  }
+
+  return path[bestIndex] ?? start;
+}
+
+function inlandFromShore(
+  cells: MapCell[],
+  index: number,
+  width: number,
+  height: number,
+  shore: Set<number>,
+): number | null {
+  const x = index % width;
+  const y = Math.floor(index / width);
+  let towardX = 0;
+  let towardY = 0;
+
+  for (const [dx, dy] of SHORE_STEPS) {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+    if (cells[indexOf(nx, ny, width)]?.terrain === TerrainKind.Water) {
+      towardX += dx;
+      towardY += dy;
+    }
+  }
+
+  if (towardX === 0 && towardY === 0) return null;
+
+  const stepX =
+    Math.abs(towardX) >= Math.abs(towardY) && towardX !== 0
+      ? -Math.sign(towardX)
+      : 0;
+  const stepY = stepX === 0 ? -Math.sign(towardY) : 0;
+  const nx = x + stepX;
+  const ny = y + stepY;
+  if (nx < 0 || ny < 0 || nx >= width || ny >= height) return null;
+
+  const inland = indexOf(nx, ny, width);
+  const cell = cells[inland];
+  if (!cell || cell.terrain === TerrainKind.Water || shore.has(inland)) {
+    return null;
+  }
+  return inland;
+}
+
+/**
+ * The opening spotlight turns a circle of the map to grass, which can
+ * pull a beach off the water or snap a run shorter than three tiles.
+ * Those cells become ordinary grass.
+ */
+export function pruneBeaches(map: MapData) {
+  const distance = cardinalWaterDistance(map);
+
+  for (let index = 0; index < map.cells.length; index++) {
+    const cell = map.cells[index];
+    if (!cell || cell.terrain !== TerrainKind.Sand) continue;
+    const tiles = distance[index] ?? -1;
+    if (tiles !== 1 && tiles !== 2) softenSand(cell);
+  }
+
+  const shoreSand = new Set<number>();
+  map.cells.forEach((cell, index) => {
+    if (cell.terrain === TerrainKind.Sand && distance[index] === 1) {
+      shoreSand.add(index);
+    }
+  });
+
+  for (const run of shoreComponents(shoreSand, map.width, map.height)) {
+    if (run.length >= BEACH_MIN) continue;
+    for (const index of run) {
+      const cell = map.cells[index];
+      if (cell) softenSand(cell);
+      shoreSand.delete(index);
+    }
+  }
+
+  for (let index = 0; index < map.cells.length; index++) {
+    const cell = map.cells[index];
+    if (!cell || cell.terrain !== TerrainKind.Sand || distance[index] !== 2) {
+      continue;
+    }
+    if (linkedShore(index, shoreSand, map.width, map.height).length === 0) {
+      softenSand(cell);
+    }
+  }
+}
+
+function softenSand(cell: MapCell) {
+  cell.terrain = TerrainKind.Grass;
+  if (cell.fertility < 0.45) cell.fertility = 0.45;
+}
+
+function cardinalWaterDistance(map: MapData): Int16Array {
+  const { width, height, cells } = map;
+  const distance = new Int16Array(cells.length);
+  distance.fill(-1);
+  const queue: number[] = [];
+
+  cells.forEach((cell, index) => {
+    if (cell.terrain !== TerrainKind.Water) return;
+    distance[index] = 0;
+    queue.push(index);
+  });
+
+  for (let cursor = 0; cursor < queue.length; cursor++) {
+    const current = queue[cursor];
+    if (current === undefined) break;
+    const soFar = distance[current] ?? 0;
+    if (soFar >= 2) continue;
+    const x = current % width;
+    const y = Math.floor(current / width);
+
+    for (const [dx, dy] of SHORE_STEPS) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+      const next = indexOf(nx, ny, width);
+      if (distance[next] !== -1) continue;
+      distance[next] = soFar + 1;
+      queue.push(next);
+    }
+  }
+
+  return distance;
 }
 
 /* -------------------------------------------------------------------------- */
