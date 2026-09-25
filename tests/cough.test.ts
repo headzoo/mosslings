@@ -5,13 +5,15 @@ import {
   COUGH_FRAME_SECONDS,
   COUGH_GAP_SECONDS,
   COUGH_PLAY_SECONDS,
-  COUGH_POP_ROWS,
   COUGH_ROWS,
   COUGH_SCALE,
-  COUGH_TEXT,
   COUGH_ZOOM,
+  SICK_LINES,
+  SPEECH_POP_ROWS,
+  SPEECH_ROWS,
   coughMotion,
   coughsInView,
+  sickLine,
 } from "../lib/cough";
 import type { Camera } from "../lib/map-camera";
 import type { PreviewMossling } from "../lib/map-preview";
@@ -32,15 +34,17 @@ function sick(
   };
 }
 
-test("the bubble wraps cough text and ends in a tail", () => {
-  assert.equal(COUGH_TEXT, "cough");
-  assert.ok((COUGH_POP_ROWS[0]?.length ?? 0) < (COUGH_ROWS[0]?.length ?? 0));
-  const tip = COUGH_ROWS[COUGH_ROWS.length - 1] ?? "";
-  assert.equal(tip.replaceAll(".", ""), "o");
-  assert.equal(tip.indexOf("o"), Math.floor(tip.length / 2));
-  const body = COUGH_ROWS.slice(1, COUGH_ROWS.length - 2).join("");
-  assert.ok(!body.includes("k"));
-  assert.ok(body.includes("w"));
+test("the speech bubble is a borderless pill around an emoji sentence", () => {
+  assert.deepEqual([...SICK_LINES], ["🤧💦😷", "🤒🤢💦", "😷🤧💫"]);
+  assert.equal(sickLine(0), sickLine(0));
+  assert.ok(SICK_LINES.includes(sickLine(4)));
+  assert.ok((SPEECH_POP_ROWS[0]?.length ?? 0) < (SPEECH_ROWS[0]?.length ?? 0));
+  assert.ok((SPEECH_ROWS[0]?.length ?? 0) > (COUGH_ROWS[0]?.length ?? 0));
+  const mid = SPEECH_ROWS[Math.floor(SPEECH_ROWS.length / 2)] ?? "";
+  const cap = SPEECH_ROWS[0] ?? "";
+  assert.ok(cap.replaceAll(".", "").length < mid.replaceAll(".", "").length);
+  assert.equal(SPEECH_ROWS.join("").includes("o"), false);
+  assert.ok(mid.includes("w"));
 });
 
 test("the clip fades on the last frame, then stays quiet for 2 seconds", () => {
@@ -48,7 +52,7 @@ test("the clip fades on the last frame, then stays quiet for 2 seconds", () => {
   const full = coughMotion(COUGH_FRAME_SECONDS, 0);
   const hold = coughMotion(COUGH_FRAME_SECONDS * 2, 0);
   const fade = coughMotion(COUGH_FRAME_SECONDS * 3, 0);
-  const fading = coughMotion(COUGH_FRAME_SECONDS * 3 + 0.2, 0);
+  const fading = coughMotion(COUGH_FRAME_SECONDS * 3.6, 0);
   const quiet = coughMotion(COUGH_PLAY_SECONDS, 0);
   const stillQuiet = coughMotion(
     COUGH_PLAY_SECONDS + COUGH_GAP_SECONDS - 0.05,
@@ -95,8 +99,9 @@ test("only a living infected Mossling at max zoom grows a bubble", () => {
   );
   const shown = coughsInView([ill], width, camera, COUGH_ZOOM, 0);
   assert.equal(shown.length, 1);
+  assert.equal(shown[0]?.text, sickLine(0));
   assert.equal(shown[0]?.frame, 0);
-  assert.equal(shown[0]?.width, (COUGH_POP_ROWS[0]?.length ?? 0) * COUGH_SCALE);
+  assert.equal(shown[0]?.width, (SPEECH_POP_ROWS[0]?.length ?? 0) * COUGH_SCALE);
   const held = coughsInView(
     [ill],
     width,
@@ -105,7 +110,7 @@ test("only a living infected Mossling at max zoom grows a bubble", () => {
     COUGH_FRAME_SECONDS,
   );
   assert.equal(held[0]?.frame, 1);
-  assert.equal(held[0]?.width, (COUGH_ROWS[0]?.length ?? 0) * COUGH_SCALE);
+  assert.equal(held[0]?.width, (SPEECH_ROWS[0]?.length ?? 0) * COUGH_SCALE);
   assert.ok(COUGH_SCALE > 1);
   assert.ok((shown[0]?.y ?? 0) < Math.floor(onMap / width));
 });

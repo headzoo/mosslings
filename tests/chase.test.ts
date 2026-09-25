@@ -4,14 +4,18 @@ import {
   CHASE_LAP_SECONDS,
   CHASE_PLAY_SECONDS,
   CHASE_RADIUS,
+  CHASE_LINES,
+  chaseLine,
   chasePlace,
-  LOL_TEXT,
   lolInView,
 } from "../lib/chase";
 import {
   COUGH_FRAME_SECONDS,
   COUGH_PLAY_SECONDS,
+  COUGH_SCALE,
   COUGH_ZOOM,
+  SPEECH_POP_ROWS,
+  SPEECH_ROWS,
   coughMotion,
 } from "../lib/cough";
 import { MONTH_SECONDS, WEEK_SECONDS } from "../lib/game-time";
@@ -174,8 +178,9 @@ test("chasers stay opposite, three tiles apart, for two weeks", () => {
   );
 });
 
-test("the lol bubble matches the cough pop and sits above the runner", () => {
-  assert.equal(LOL_TEXT, "lol");
+test("the chase bubble matches the cough pop and sits above the runner", () => {
+  assert.ok(CHASE_LINES.includes(chaseLine(1)));
+  assert.equal(chaseLine(1), chaseLine(1));
   const width = 20;
   const camera: Camera = { x: 0, y: 0, width: 12, height: 8, left: 0, top: 0 };
   const pair = [creature(1, 3, 3, width), creature(2, 5, 3, width)];
@@ -196,6 +201,9 @@ test("the lol bubble matches the cough pop and sits above the runner", () => {
   assert.deepEqual(lolInView(pair, width, camera, 24, 0), []);
   const shown = lolInView(pair, width, camera, COUGH_ZOOM, 0);
   assert.equal(shown.length, 2);
+  assert.equal(shown[0]?.text, chaseLine(1));
+  const speechRows = shown[0]?.frame === 0 ? SPEECH_POP_ROWS : SPEECH_ROWS;
+  assert.equal(shown[0]?.width, (speechRows[0]?.length ?? 0) * COUGH_SCALE);
   const lead = chasePlace(pair[0], pair[1], width, 0);
   assert.ok(lead);
   assert.equal(shown[0]?.frame, coughMotion(0, 1)?.frame);
@@ -214,7 +222,6 @@ test("the lol bubble matches the cough pop and sits above the runner", () => {
     lolInView(pair, width, camera, COUGH_ZOOM, COUGH_PLAY_SECONDS),
     [],
   );
-  assert.ok(chasePlace(pair[0], pair[1], width, COUGH_PLAY_SECONDS));
 });
 
 test("a chase keeps the kite down", () => {

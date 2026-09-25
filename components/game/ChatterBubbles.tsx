@@ -4,10 +4,10 @@ import { useEffect, useRef } from "react";
 import { chattersInView } from "@/lib/chatter";
 import {
   COUGH_FILL,
-  COUGH_FONT,
   COUGH_INK,
-  COUGH_POP_ROWS,
-  COUGH_ROWS,
+  SPEECH_FONT,
+  SPEECH_POP_ROWS,
+  SPEECH_ROWS,
 } from "@/lib/cough";
 import type { MapData } from "@/lib/map";
 import type { Camera } from "@/lib/map-camera";
@@ -46,9 +46,8 @@ function drawBubble(
   const left = Math.round(cx - width / 2);
   const top = Math.round(cy - height / 2);
   if (!onScreen(left, top, width, height, viewWidth, viewHeight)) return;
-  const rows = frame === 0 ? COUGH_POP_ROWS : COUGH_ROWS;
+  const rows = frame === 0 ? SPEECH_POP_ROWS : SPEECH_ROWS;
   const scale = rows.length > 0 ? height / rows.length : 1;
-  const bodyRows = rows.length - 2;
   context.globalAlpha = alpha;
   for (let y = 0; y < rows.length; y++) {
     const row = rows[y];
@@ -61,11 +60,11 @@ function drawBubble(
     }
   }
   context.imageSmoothingEnabled = true;
-  context.font = COUGH_FONT;
+  context.font = SPEECH_FONT;
   context.textAlign = "center";
   context.textBaseline = "middle";
   context.fillStyle = COUGH_INK;
-  context.fillText(text, left + width / 2, top + (bodyRows * scale) / 2);
+  context.fillText(text, left + width / 2, top + height / 2);
   context.imageSmoothingEnabled = false;
 }
 

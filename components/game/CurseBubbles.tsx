@@ -46,7 +46,6 @@ function drawBubble(
   if (!onScreen(left, top, width, height, viewWidth, viewHeight)) return;
   const rows = frame === 0 ? COUGH_POP_ROWS : COUGH_ROWS;
   const scale = rows.length > 0 ? height / rows.length : 1;
-  const bodyRows = rows.length - 2;
   context.globalAlpha = alpha;
   for (let y = 0; y < rows.length; y++) {
     const row = rows[y];
@@ -63,7 +62,7 @@ function drawBubble(
   context.textAlign = "center";
   context.textBaseline = "middle";
   context.fillStyle = COUGH_INK;
-  context.fillText(CURSE_TEXT, left + width / 2, top + (bodyRows * scale) / 2);
+  context.fillText(CURSE_TEXT, left + width / 2, top + height / 2);
   context.imageSmoothingEnabled = false;
 }
 

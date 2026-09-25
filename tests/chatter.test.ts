@@ -88,7 +88,7 @@ function gapElapsed(id: number) {
   );
 }
 
-test("about one Mossling in five wins a season, and the same id agrees", () => {
+test("about half of idle Mosslings win a season, and the same id agrees", () => {
   const season = 3;
   let wins = 0;
   for (let id = 0; id < 2000; id++) {
@@ -96,8 +96,8 @@ test("about one Mossling in five wins a season, and the same id agrees", () => {
     assert.equal(rolled, chatterRoll(id, season));
     if (rolled) wins++;
   }
-  assert.equal(CHATTER_CHANCE, 5);
-  assert.ok(wins > 300 && wins < 500);
+  assert.equal(CHATTER_CHANCE, 2);
+  assert.ok(wins > 900 && wins < 1100);
 });
 
 test("a line lasts one season, then the herd re-rolls", () => {

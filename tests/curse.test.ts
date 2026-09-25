@@ -56,7 +56,7 @@ function at(width: number, x: number, y: number) {
   return y * width + x;
 }
 
-test("the bubble wraps cartoon cursing and matches the cough tail", () => {
+test("the bubble wraps cartoon cursing", () => {
   assert.equal(CURSE_TEXT, "@$#*!");
   assert.equal(CURSE_TEXT.length, 5);
   assert.ok(CURSE_ZOOMS.has(24));

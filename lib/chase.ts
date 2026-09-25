@@ -1,8 +1,8 @@
 import {
-  COUGH_POP_ROWS,
-  COUGH_ROWS,
   COUGH_SCALE,
   COUGH_ZOOM,
+  SPEECH_POP_ROWS,
+  SPEECH_ROWS,
   type CoughMark,
   coughMotion,
 } from "./cough";
@@ -17,7 +17,15 @@ export const CHASE_PLAY_SECONDS = WEEK_SECONDS * 2;
 export const CHASE_RADIUS = 1.5;
 /** One circuit. A two-week chase is about two laps. */
 export const CHASE_LAP_SECONDS = 1;
-export const LOL_TEXT = "lol";
+/** Chase sentences. One line per runner, stable for that id. */
+export const CHASE_LINES = ["😂🏃💨", "🤣👉😜", "😜💨💚", "🏃💨🤣"] as const;
+export type ChaseLine = (typeof CHASE_LINES)[number];
+
+/** One chase sentence, stable for this id. */
+export function chaseLine(id: number): ChaseLine {
+  const pick = (Math.imul(id + 1, 0x85ebca6b) >>> 0) % CHASE_LINES.length;
+  return CHASE_LINES[pick] ?? CHASE_LINES[0];
+}
 
 /** Chebyshev tiles. The same spacing where a pair stops walking and plays. */
 const CHASE_REACH = 2;
@@ -95,7 +103,7 @@ export function chasePlace(
 }
 
 function bubbleSize(frame: number) {
-  const rows = frame === 0 ? COUGH_POP_ROWS : COUGH_ROWS;
+  const rows = frame === 0 ? SPEECH_POP_ROWS : SPEECH_ROWS;
   return {
     width: (rows[0]?.length ?? 0) * COUGH_SCALE,
     height: rows.length * COUGH_SCALE,
@@ -116,7 +124,7 @@ function originInView(
 }
 
 /**
- * “lol” bubbles for chasers the camera can see, at max zoom only.
+ * Emoji bubbles for chasers the camera can see, at max zoom only.
  * The pop, fade, and gap match a cough, and the bubble sits on the orbit.
  */
 export function lolInView(
@@ -151,6 +159,7 @@ export function lolInView(
       alpha: motion.alpha,
       width,
       height,
+      text: chaseLine(mossling.id),
     });
   }
   return marks;

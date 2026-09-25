@@ -1,8 +1,8 @@
 import {
-  COUGH_POP_ROWS,
-  COUGH_ROWS,
   COUGH_SCALE,
   COUGH_ZOOM,
+  SPEECH_POP_ROWS,
+  SPEECH_ROWS,
   type CoughMark,
   coughMotion,
 } from "./cough";
@@ -18,8 +18,25 @@ import { mosslingInView } from "./mossling-detail";
 import { isWhistling, seasonIndexAt } from "./whistle";
 
 /** Share of idle Mosslings who talk in a given season. */
-export const CHATTER_CHANCE = 5;
-export const CHATTER_LINES = ["lol", "haha", "weee"] as const;
+export const CHATTER_CHANCE = 2;
+export const CHATTER_LINES = [
+  "🥕😋💚",
+  "🌞😎🌿",
+  "😂🤣💚",
+  "😏👀💋",
+  "🥰👉👈",
+  "🌙💋✨",
+  "🌿💚🥰",
+  "😜💨🏃",
+  "🤔👀🌿",
+  "😎💪🔥",
+  "🍑👀😏",
+  "💤🌙🌿",
+  "🤗💚🥕",
+  "😋👉👌",
+  "💃🕺✨",
+  "🔥😏💦",
+] as const;
 
 export type ChatterLine = (typeof CHATTER_LINES)[number];
 
@@ -27,7 +44,7 @@ export interface ChatterMark extends CoughMark {
   text: ChatterLine;
 }
 
-/** True for about one id in five, for this season only. */
+/** True for about half of ids, for this season only. */
 export function chatterRoll(id: number, seasonIndex: number): boolean {
   return (
     ((Math.imul(id + 1, 0xc2b2ae35) ^
@@ -38,14 +55,14 @@ export function chatterRoll(id: number, seasonIndex: number): boolean {
   );
 }
 
-/** One of the three lines, stable until the season changes. */
+/** One emoji sentence, stable until the season changes. */
 export function chatterLine(id: number, seasonIndex: number): ChatterLine {
   const pick =
     ((Math.imul(id + 1, 0x165667b1) ^
       Math.imul(seasonIndex + 1, 0x85ebca6b)) >>>
       0) %
     CHATTER_LINES.length;
-  return CHATTER_LINES[pick] ?? "lol";
+  return CHATTER_LINES[pick] ?? CHATTER_LINES[0];
 }
 
 /**
@@ -75,7 +92,7 @@ export function isChattering(
 }
 
 function bubbleSize(frame: number) {
-  const rows = frame === 0 ? COUGH_POP_ROWS : COUGH_ROWS;
+  const rows = frame === 0 ? SPEECH_POP_ROWS : SPEECH_ROWS;
   return {
     width: (rows[0]?.length ?? 0) * COUGH_SCALE,
     height: rows.length * COUGH_SCALE,
