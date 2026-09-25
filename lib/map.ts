@@ -41,6 +41,8 @@ export interface MapCell {
    * spreads to touching carrot tiles.
    */
   blight?: boolean;
+  /** Months since blight killed a ripe carrot. Cleared when the tile reclaims. */
+  blightMonths?: number;
   /** Progress toward natural recovery after a catastrophe (0..1). */
   recovery?: number;
   /** Final terrain classification used by the simulation. */

@@ -218,20 +218,20 @@ test("benign powers do not panic Mosslings; pause and deterministic replay are p
   assert.deepEqual(a.snapshot(), paused);
 });
 
-test("threats track burning cells, moving storms, upcoming impacts and unhit quake victims", () => {
+test("threats track burning cells, moving storms, and upcoming impacts", () => {
   const world = new GodWorld(fixture(), []);
   for (const kind of [
     "fire",
     "tornado",
     "meteor",
-    "quake",
+    "nuke",
     "lightning",
   ] as const) {
     const action = GOD_ACTIONS[kind];
     const effect = action.create({ x: 15, y: 15 }, 42, 1);
     action.update(effect, world.context, 0);
     assert.ok(action.threats?.(effect, world.context).length);
-    if (kind === "meteor") {
+    if (kind === "meteor" || kind === "nuke") {
       effect.impacted = true;
       assert.equal(action.threats?.(effect, world.context).length, 0);
     }
@@ -239,10 +239,6 @@ test("threats track burning cells, moving storms, upcoming impacts and unhit qua
       for (const index of effect.marks.keys())
         world.map.cells[index].burning = false;
       assert.equal(action.threats?.(effect, world.context).length, 0);
-    }
-    if (kind === "quake") {
-      effect.hit.add(9);
-      assert.ok(action.threats?.(effect, world.context)[0].alreadyHit?.has(9));
     }
     if (kind === "tornado") {
       effect.x = 20;

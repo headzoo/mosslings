@@ -123,7 +123,7 @@ test("only a living survivor at the last two zooms grows a bubble", () => {
   assert.equal(cursing(hit, CURSE_PLAY_SECONDS), false);
 });
 
-test("lightning, tornado, quake, and fire stamp survivors and skip the dead", () => {
+test("lightning, tornado, nuke, and fire stamp survivors and skip the dead", () => {
   const map = fixture();
   const width = map.width;
   const strike = at(width, 15, 15);
@@ -140,10 +140,19 @@ test("lightning, tornado, quake, and fire stamp survivors and skip the dead", ()
   assert.ok((lived?.health ?? 0) > 0);
   assert.equal(lived?.cursedAt, 0);
 
-  const quake = new GodWorld(fixture(), [mossling(strike)]);
-  quake.cast("quake", 15, 15);
-  assert.ok((quake.mosslings[0]?.health ?? 0) > 0);
-  assert.equal(quake.mosslings[0]?.cursedAt, 0);
+  const blast = fixture(60, 40);
+  const nuke = new GodWorld(blast, [
+    mossling(at(blast.width, 15, 15), 0),
+    mossling(at(blast.width, 33, 15), 1),
+  ]);
+  nuke.cast("nuke", 15, 15);
+  for (let i = 0; i < 20; i++) nuke.tick(0.05);
+  const nuked = nuke.mosslings.find((m) => m.id === 0);
+  const rim = nuke.mosslings.find((m) => m.id === 1);
+  assert.ok((nuked?.health ?? 100) <= 0);
+  assert.equal(nuked?.cursedAt, undefined);
+  assert.ok((rim?.health ?? 0) > 0);
+  assert.ok(rim?.cursedAt !== undefined);
 
   const storm = new GodWorld(fixture(), [mossling(strike)]);
   storm.cast("tornado", 15, 15);

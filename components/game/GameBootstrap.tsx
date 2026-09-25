@@ -106,7 +106,8 @@ export function GameBootstrap() {
         introPhase={world ? introPhase : null}
         onIntroContinue={() =>
           setIntroPhase((phase) => {
-            if (phase === "mosslings") return "species";
+            if (phase === "mosslings") return "click";
+            if (phase === "click") return "species";
             if (phase === "species") return "map";
             if (phase === "map") return "powers";
             if (phase === "powers") return "world";

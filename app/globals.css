@@ -144,7 +144,8 @@ button:hover {
   width: 46px;
   height: 46px;
 }
-.year-sun {
+.year-sun,
+.year-clock {
   width: 46px;
   height: 46px;
   image-rendering: pixelated;
@@ -700,7 +701,8 @@ button:hover {
     width: 36px;
     height: 36px;
   }
-  .year-sun {
+  .year-sun,
+  .year-clock {
     width: 36px;
     height: 36px;
   }
@@ -828,7 +830,8 @@ button:hover {
     width: 28px;
     height: 28px;
   }
-  .year-sun {
+  .year-sun,
+  .year-clock {
     width: 28px;
     height: 28px;
   }
@@ -1810,6 +1813,9 @@ button:hover {
   z-index: 4;
   pointer-events: auto;
 }
+.mossling-intro--click {
+  pointer-events: none;
+}
 .mossling-intro--species,
 .mossling-intro--powers {
   position: fixed;
@@ -1856,8 +1862,12 @@ button:hover {
   -moz-osx-font-smoothing: auto;
   transform: translateY(-50%);
 }
-.mossling-intro-copy--mosslings {
+.mossling-intro-copy--mosslings,
+.mossling-intro-copy--click {
   right: clamp(16px, 4vw, 32px);
+}
+.mossling-intro-copy--click {
+  pointer-events: auto;
 }
 .mossling-intro-copy--world {
   left: 50%;
@@ -1934,6 +1944,7 @@ button:hover {
     --lens-r: 120px;
   }
   .mossling-intro-copy--mosslings,
+  .mossling-intro-copy--click,
   .mossling-intro-copy--species,
   .mossling-intro-copy--powers,
   .mossling-intro-copy--move {

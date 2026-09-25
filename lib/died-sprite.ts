@@ -10,8 +10,12 @@ const SOUL_RIM: Rgb = [140, 198, 255];
 const SOUL: Rgb = [255, 255, 255];
 const EYE: Rgb = [20, 24, 32];
 
-const SOUL_Y = [7, 4, 1, -2] as const;
+/** Soul center, low in the mound first, then lifting clear of the grave. */
+const SOUL_Y = [24, 17, 11, 5] as const;
 const SOUL_ALPHA = [255, 255, 220, 120] as const;
+
+/** Upright slab. The rounded cap is drawn separately and sits above the mound. */
+const SLAB = { x0: 10, x1: 21, y0: 16, y1: 25 } as const;
 
 /** One soul-rise cycle, in game seconds. Pause freezes it. */
 export const ASCENT_SECONDS = 1;
@@ -44,10 +48,12 @@ function ellipse(
   ry: number,
   color: Rgb,
   alpha = 255,
+  omit?: (x: number, y: number) => boolean,
 ) {
   if (rx <= 0 || ry <= 0) return;
   for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) {
     for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
+      if (omit?.(x, y)) continue;
       const nx = (x + 0.5 - cx) / rx;
       const ny = (y + 0.5 - cy) / ry;
       if (nx * nx + ny * ny <= 1) plot(image, frame, x, y, color, alpha);
@@ -55,18 +61,27 @@ function ellipse(
   }
 }
 
+function slabCovers(x: number, y: number) {
+  return x >= SLAB.x0 && x <= SLAB.x1 && y >= SLAB.y0 && y <= SLAB.y1;
+}
+
+function drawMound(image: ImageData, frame: number, keepSlab = false) {
+  const omit = keepSlab ? slabCovers : undefined;
+  ellipse(image, frame, 16, 27, 11, 3.6, MOUND, 255, omit);
+  ellipse(image, frame, 16, 28.2, 8, 2, MOUND_DARK, 255, omit);
+}
+
 function drawGrave(image: ImageData, frame: number) {
-  ellipse(image, frame, 16, 27, 11, 3.6, MOUND);
-  ellipse(image, frame, 16, 28.2, 8, 2, MOUND_DARK);
-  for (let y = 16; y <= 25; y++) {
-    for (let x = 10; x <= 21; x++) plot(image, frame, x, y, STONE);
+  drawMound(image, frame);
+  for (let y = SLAB.y0; y <= SLAB.y1; y++) {
+    for (let x = SLAB.x0; x <= SLAB.x1; x++) plot(image, frame, x, y, STONE);
   }
   ellipse(image, frame, 15.5, 16, 6, 5.2, STONE);
   ellipse(image, frame, 13.2, 13.4, 2.1, 1.3, STONE_LIGHT);
 }
 
 function drawSoul(image: ImageData, frame: number) {
-  const cy = SOUL_Y[frame] ?? 7;
+  const cy = SOUL_Y[frame] ?? 24;
   const alpha = SOUL_ALPHA[frame] ?? 255;
   ellipse(image, frame, 16, cy, 4.4, 5.1, SOUL_RIM, alpha);
   ellipse(image, frame, 16, cy + 0.4, 3.1, 3.7, SOUL, alpha);
@@ -80,7 +95,7 @@ function drawSoul(image: ImageData, frame: number) {
 
 let sheetPromise: HTMLCanvasElement | null | undefined;
 
-/** Grave and rising soul, four frames tall. Shared by the HUD and map corpses. */
+/** Grave and a soul that rises out of the mound. Shared by the HUD and map corpses. */
 export function buildDiedSpriteSheet(): HTMLCanvasElement | null {
   if (typeof document === "undefined") return null;
   if (sheetPromise !== undefined) return sheetPromise;
@@ -96,6 +111,8 @@ export function buildDiedSpriteSheet(): HTMLCanvasElement | null {
   for (let frame = 0; frame < FRAME_COUNT; frame++) {
     drawGrave(image, frame);
     drawSoul(image, frame);
+    // Dirt stays in front of the spirit so it climbs out of the ground.
+    drawMound(image, frame, true);
   }
   sprite.putImageData(image, 0, 0);
   sheetPromise = canvas;

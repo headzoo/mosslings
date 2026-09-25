@@ -10,7 +10,7 @@ const CYCLE_SECONDS = 0.8;
 export const DISASTER_POWERS = [
   "fire",
   "tornado",
-  "quake",
+  "nuke",
   "lightning",
   "meteor",
 ] as const;
@@ -117,25 +117,26 @@ function drawTornado(image: ImageData, frame: number) {
   }
 }
 
-function drawQuake(image: ImageData, frame: number) {
-  const shift = [0, 1, -1, 0] as const;
-  const ox = shift[frame] ?? 0;
-  const dirt: Rgb = [112, 74, 42];
-  const crack: Rgb = [42, 28, 18];
-  for (let y = 6; y <= 25; y++) {
-    for (let x = 6; x <= 25; x++) {
-      const dx = x < 10 ? 10 - x : x > 21 ? x - 21 : 0;
-      const dy = y < 10 ? 10 - y : y > 21 ? y - 21 : 0;
-      if (dx * dx + dy * dy > 16) continue;
-      plot(image, frame, x + ox, y, dirt);
-    }
+function drawNuke(image: ImageData, frame: number) {
+  const stem = [6, 10, 13, 14] as const;
+  const cap = [0, 2.2, 5.5, 8] as const;
+  const height = stem[frame] ?? 6;
+  const width = cap[frame] ?? 0;
+  const base = 28;
+  const smoke: Rgb = [186, 190, 196];
+  const shade: Rgb = [120, 126, 134];
+  const hot: Rgb = [255, 112, 36];
+  ellipse(image, frame, 16, base - 1, 3.2 + frame * 0.3, 1.6, hot);
+  for (let y = 0; y < height; y++) {
+    const t = y / height;
+    const rx = 1.15 + (1 - t) * 0.7;
+    ellipse(image, frame, 16, base - 3 - y, rx, 1.05, y % 2 ? shade : smoke);
   }
-  line(image, frame, 9 + ox, 11, 16 + ox, 16, crack);
-  line(image, frame, 16 + ox, 16, 23 + ox, 13, crack);
-  line(image, frame, 16 + ox, 16, 14 + ox, 23, crack);
-  line(image, frame, 16 + ox, 16, 22 + ox, 22, crack);
-  plot(image, frame, 12 + ox, 14, crack);
-  plot(image, frame, 20 + ox, 19, crack);
+  if (width > 0) {
+    const capY = base - 3 - height;
+    ellipse(image, frame, 16, capY, width, width * 0.42, smoke);
+    ellipse(image, frame, 16, capY + 0.6, width * 0.72, width * 0.22, shade);
+  }
 }
 
 function drawLightning(image: ImageData, frame: number) {
@@ -191,7 +192,7 @@ function drawMeteor(image: ImageData, frame: number) {
 const DRAW: Record<DisasterId, (image: ImageData, frame: number) => void> = {
   fire: drawFire,
   tornado: drawTornado,
-  quake: drawQuake,
+  nuke: drawNuke,
   lightning: drawLightning,
   meteor: drawMeteor,
 };

@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  advanceBlightReclaim,
   advanceCrops,
+  BLIGHT_RECLAIM_MONTHS,
   CROP_GROWTH_STEP,
   CROP_MOISTURE_LOSS,
   CROP_WILT_MOISTURE,
@@ -462,4 +464,57 @@ test("a blight outbreak is bulletined once", () => {
   tend();
   world.advanceTo(4 * SEASON_SECONDS + MONTH_SECONDS);
   assert.equal(outbreaks().length, 1);
+});
+
+test("dead blight reclaims as grass after two years", () => {
+  const map = fixture(1, 1);
+  map.cells[0].growth = 1;
+  map.cells[0].blight = true;
+  map.cells[0].terrain = "dirt";
+  assert.equal(advanceBlightReclaim(map), 0);
+  assert.equal(map.cells[0].blightMonths, 0);
+  for (let month = 1; month < BLIGHT_RECLAIM_MONTHS; month++)
+    assert.equal(advanceBlightReclaim(map), 0);
+  assert.equal(advanceBlightReclaim(map), 1);
+  assert.equal(map.cells[0].growth, undefined);
+  assert.equal(map.cells[0].blight, undefined);
+  assert.equal(map.cells[0].blightMonths, undefined);
+  assert.equal(map.cells[0].terrain, "grass");
+});
+
+test("blight reclaim ignores unripe carrots", () => {
+  const map = fixture(1, 1);
+  map.cells[0].growth = 0.5;
+  map.cells[0].blight = true;
+  assert.equal(advanceBlightReclaim(map), 0);
+  assert.equal(map.cells[0].blightMonths, undefined);
+  assert.equal(map.cells[0].growth, 0.5);
+});
+
+test("drought wilt clears the blight reclaim timer", () => {
+  const map = fixture(1, 1);
+  map.cells[0].growth = 1;
+  map.cells[0].blight = true;
+  map.cells[0].blightMonths = 12;
+  map.cells[0].moisture = CROP_WILT_MOISTURE;
+  advanceCrops(map);
+  assert.equal(map.cells[0].growth, undefined);
+  assert.equal(map.cells[0].blight, undefined);
+  assert.equal(map.cells[0].blightMonths, undefined);
+});
+
+test("the world reclaims dead blight through the monthly tick", () => {
+  const map = fixture(1, 1);
+  map.cells[0].growth = 1;
+  map.cells[0].blight = true;
+  const world = new GodWorld(map, []);
+  world.advanceTo((BLIGHT_RECLAIM_MONTHS + 1) * MONTH_SECONDS);
+  assert.equal(world.map.cells[0].growth, undefined);
+  assert.equal(world.map.cells[0].blight, undefined);
+  assert.equal(world.map.cells[0].terrain, "grass");
+  assert.ok(
+    world.events.some((event) =>
+      event.message.includes("Grass and moss have reclaimed"),
+    ),
+  );
 });

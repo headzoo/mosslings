@@ -1,4 +1,9 @@
-import { advanceCrops, appetite, cropFoodSupply } from "../crops";
+import {
+  advanceBlightReclaim,
+  advanceCrops,
+  appetite,
+  cropFoodSupply,
+} from "../crops";
 import { markCurse } from "../curse";
 import {
   FIELD_REACH,
@@ -573,6 +578,7 @@ export class GodWorld {
         const look = foliageAt(this.elapsed);
         const crops = advanceCrops(this.map, look.crop);
         const withered = crops.withered;
+        const reclaimed = advanceBlightReclaim(this.map);
         advanceVegetation(this.map);
         this.feed(look.crop);
         this.rollWeather();
@@ -584,6 +590,10 @@ export class GodWorld {
         if (withered)
           this.record(
             `The carrots withered on ${withered} tile${withered === 1 ? "" : "s"}.`,
+          );
+        if (reclaimed)
+          this.record(
+            `Grass and moss have reclaimed ${reclaimed} dead carrot row${reclaimed === 1 ? "" : "s"}.`,
           );
         if (crops.blightAt) this.recordTagged("crop-blight", crops.blightAt);
         this.recordResourceHistory();

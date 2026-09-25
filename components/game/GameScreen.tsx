@@ -15,6 +15,7 @@ import {
   EMPTY_ADVISORY_MEMORY,
   stepAdvisory,
 } from "@/lib/advisories";
+import { type GodSound, godSoundWaitsForImpact } from "@/lib/chiptune";
 import { GOD_ACTIONS } from "@/lib/god/actions";
 import { EFFECT_CAP_MESSAGE } from "@/lib/god/engine";
 import type { PowerId } from "@/lib/god/types";
@@ -26,12 +27,12 @@ import {
 import type { MapCell, MapData } from "@/lib/map";
 import { type Camera, getCamera, zoomAtPoint } from "@/lib/map-camera";
 import type { PreviewMossling } from "@/lib/map-preview";
-import { mosslingsPublicAsset } from "@/lib/public-asset";
 import {
   mapToolFromKeyboard,
   shouldIgnoreMapToolShortcut,
 } from "@/lib/map-tool-shortcuts";
 import { detailMode, SPRITE_ZOOM } from "@/lib/mossling-detail";
+import { mosslingsPublicAsset } from "@/lib/public-asset";
 import { canvasToPng, captureViewport } from "@/lib/screenshot";
 import {
   clusterSpecies,
@@ -74,6 +75,7 @@ import { TileInspector } from "./TileInspector";
 import { PlayControls, Year } from "./TimeControls";
 import { useGameTime } from "./useGameTime";
 import { useGodWorld } from "./useGodWorld";
+import { useMusic } from "./useMusic";
 import {
   isCropIntroDismissed,
   isMoveIntroDismissed,
@@ -150,6 +152,29 @@ export function GameScreen({
     gameTime.getDate,
     gameTime.getElapsed,
   );
+  const music = useMusic();
+  const impactCues = useRef(new Map<number, GodSound>());
+  const engineRef = useRef(engine);
+  engineRef.current = engine;
+  useEffect(() => {
+    const cues = impactCues.current;
+    const cancel = subscribeFrame(() => {
+      const world = engineRef.current;
+      if (!world) return;
+      for (const [id, cue] of cues) {
+        const effect = world.effects.find((item) => item.id === id);
+        if (!effect || effect.impacted) {
+          cue.impact();
+          cues.delete(id);
+        }
+      }
+    });
+    return () => {
+      cancel();
+      for (const cue of cues.values()) cue.stop();
+      cues.clear();
+    };
+  }, [subscribeFrame]);
   const [power, setPower] = useState<PowerId | null>(null);
   const [mosslingTarget, setMosslingTarget] = useState<MosslingTarget | null>(
     null,
@@ -196,6 +221,7 @@ export function GameScreen({
   });
   cameraState.current = { center, tileSize };
   const [selection, setSelection] = useState<TileSelection | null>(null);
+  const clickDemoOpened = useRef(false);
   const [flash, setFlash] = useState<NewsFlash | null>(null);
   const [extinctionOpen, setExtinctionOpen] = useState(false);
   const extinctionShown = useRef(false);
@@ -369,6 +395,7 @@ export function GameScreen({
     if (!map) return;
     const introZoomed =
       introPhase === "mosslings" ||
+      introPhase === "click" ||
       introPhase === "species" ||
       introPhase === "map" ||
       introPhase === "powers";
@@ -429,7 +456,7 @@ export function GameScreen({
   const camera = map ? getCamera(map, viewport, tileSize, center) : null;
   cameraRef.current = camera;
   const introSpotlight =
-    introPhase === "mosslings" && map && camera
+    (introPhase === "mosslings" || introPhase === "click") && map && camera
       ? (() => {
           const cluster = introClusterCenter(map);
           return {
@@ -452,7 +479,7 @@ export function GameScreen({
       !map ||
       (kind !== "fire" &&
         kind !== "tornado" &&
-        kind !== "quake" &&
+        kind !== "nuke" &&
         kind !== "lightning" &&
         kind !== "meteor")
     )
@@ -470,6 +497,13 @@ export function GameScreen({
   const placePower = (x: number, y: number, quiet: boolean) => {
     if (!power || !map) return false;
     const message = cast(power, x, y, quiet ? { quiet: true } : undefined);
+    if (message === null && !quiet) {
+      const sound = music.playGodSound(power);
+      const placed = engine?.effects.at(-1);
+      if (placed?.kind === power && godSoundWaitsForImpact(power)) {
+        impactCues.current.set(placed.id, sound);
+      }
+    }
     if (
       message === null &&
       isDisasterPower(power) &&
@@ -621,6 +655,30 @@ export function GameScreen({
       speciesKey: group.key,
     });
   }, [map, camera, mosslings, selection, species]);
+  useEffect(() => {
+    if (introPhase !== "click") {
+      if (clickDemoOpened.current) {
+        clickDemoOpened.current = false;
+        setSelection(null);
+      }
+      return;
+    }
+    if (clickDemoOpened.current || !map) return;
+    const demo = mosslings.find(
+      (mossling) => mossling.id < 4 && (mossling.health ?? 100) > 0,
+    );
+    const cell = demo ? map.cells[demo.cellIndex] : undefined;
+    if (!demo || !cell) return;
+    clickDemoOpened.current = true;
+    setSelection({
+      seed: map.seed,
+      index: demo.cellIndex,
+      x: demo.cellIndex % map.width,
+      y: Math.floor(demo.cellIndex / map.width),
+      cell: snapshotCell(cell),
+      mossling: { ...demo },
+    });
+  }, [introPhase, map, mosslings]);
   const selected = selection?.seed === map?.seed ? selection : null;
   const highlighted = selected?.speciesKey
     ? (species.find((group) => group.key === selected.speciesKey)?.members ??
@@ -673,6 +731,8 @@ export function GameScreen({
         <PlayControls
           isPlaying={gameTime.isPlaying}
           rate={gameTime.rate}
+          muted={music.muted}
+          onToggleMute={music.toggleMuted}
           onToggle={gameTime.togglePlaying}
           onSkip={gameTime.skipToNextSpring}
           onFastForward={gameTime.fastForward}
@@ -801,7 +861,15 @@ export function GameScreen({
                 }
               }}
               onPointerDown={(event) => {
-                if (tutorialPaused || !map || !camera || event.button !== 0)
+                const inspectDuringClick = introPhase === "click";
+                if (
+                  (tutorialPaused && !inspectDuringClick) ||
+                  !map ||
+                  !camera ||
+                  event.button !== 0
+                )
+                  return;
+                if (inspectDuringClick && (mapTool !== "pointer" || power))
                   return;
                 event.currentTarget.setPointerCapture(event.pointerId);
                 if (mapTool === "zoom-in" || mapTool === "zoom-out") {

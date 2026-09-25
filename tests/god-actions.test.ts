@@ -260,21 +260,24 @@ test("tornado wanders, damages occupants, moves them without overlaps, and expir
   advance(world, 13);
   assert.equal(world.effects.length, 0);
 });
-test("quake remains inside fifty tiles of its target", () => {
+test("nuke crater stays inside twenty-five tiles and kills the center", () => {
   const world = new GodWorld(fixture(), [
     mossling(60 * 120 + 60),
     mossling(0, 1),
   ]);
-  world.cast("quake", 60, 60);
-  advance(world, 5);
-  const cracks = world.map.cells.flatMap((c, i) =>
-    c.damage === "cracked" ? [i] : [],
+  world.cast("nuke", 60, 60);
+  advance(world, 1);
+  assert.equal(world.map.cells[60 * 120 + 60]?.damage, "crater");
+  assert.equal(world.map.cells[60 * 120 + 85]?.damage, "crater");
+  assert.equal(world.map.cells[60 * 120 + 86]?.damage, undefined);
+  const craters = world.map.cells.flatMap((c, i) =>
+    c.damage === "crater" ? [i] : [],
   );
-  assert.ok(cracks.length > 50);
-  for (const i of cracks) {
-    assert.ok(Math.abs((i % 120) - 60) <= 50);
-    assert.ok(Math.abs(Math.floor(i / 120) - 60) <= 50);
+  assert.ok(craters.length > 50);
+  for (const i of craters) {
+    assert.ok(Math.hypot((i % 120) - 60, Math.floor(i / 120) - 60) <= 25);
   }
+  assert.equal(world.mosslings.find((m) => m.id === 0)?.health, 0);
   assert.equal(world.mosslings.find((m) => m.id === 1)?.health, 100);
 });
 test("meteor impact removes dead organisms and leaves a bounded crater", () => {

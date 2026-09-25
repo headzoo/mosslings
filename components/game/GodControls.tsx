@@ -89,13 +89,13 @@ export function GodTornado(props: ControlsProps) {
     />
   );
 }
-export function GodQuake(props: ControlsProps) {
+export function GodNuke(props: ControlsProps) {
   return (
     <GodButton
       {...props}
-      name="Quake"
-      icon="/mosslings/icons/quake.png"
-      power="quake"
+      name="Nuke"
+      icon="/mosslings/icons/nuke.png"
+      power="nuke"
     />
   );
 }
@@ -140,7 +140,7 @@ export function GodControls({
         <GodDisease {...props} />
         <GodFire {...props} />
         <GodTornado {...props} />
-        <GodQuake {...props} />
+        <GodNuke {...props} />
         <GodLightning {...props} />
         <GodMeteor {...props} />
       </div>

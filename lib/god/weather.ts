@@ -12,7 +12,7 @@ export const DISASTER_MONTH_CHANCE = 1 / 70;
 export const DISASTERS = [
   "fire",
   "tornado",
-  "quake",
+  "nuke",
   "lightning",
   "meteor",
 ] as const;
@@ -40,7 +40,7 @@ export const WILD_STORM = "A storm floods the land.";
 export const WILD_DISASTER: Record<(typeof DISASTERS)[number], string> = {
   fire: "A wildfire starts.",
   tornado: "A tornado touches down.",
-  quake: "The ground shakes.",
+  nuke: "A nuke falls.",
   lightning: "Lightning strikes.",
   meteor: "A meteor falls.",
 };

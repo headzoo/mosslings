@@ -7,7 +7,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { type Chiptune, createChiptune } from "@/lib/chiptune";
+import { type Chiptune, createChiptune, type GodSound } from "@/lib/chiptune";
+import type { PowerId } from "@/lib/god/types";
 
 export const MUSIC_MUTE_KEY = "mosslings:music-muted";
 
@@ -26,6 +27,11 @@ function writeMuted(muted: boolean) {
     // Private mode or a full quota should not block the in-session mute.
   }
 }
+
+const SILENT_SOUND: GodSound = {
+  impact() {},
+  stop() {},
+};
 
 export function useMusic() {
   const [muted, setMuted] = useState(false);
@@ -54,5 +60,10 @@ export function useMusic() {
     });
   }, []);
 
-  return { muted, toggleMuted };
+  const playGodSound = useCallback(
+    (kind: PowerId) => player.current?.playGodSound(kind) ?? SILENT_SOUND,
+    [],
+  );
+
+  return { muted, toggleMuted, playGodSound };
 }

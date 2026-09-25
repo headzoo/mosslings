@@ -18,6 +18,8 @@ export const CROP_MOISTURE_LOSS =
 export const CROP_LIGHT_LOSS = 0.05;
 /** Six months that are both wet and lit take a planting from sprout to ripe. */
 export const CROP_GROWTH_STEP = 1 / 6;
+/** Dead blighted carrots return to grass and moss after two years. */
+export const BLIGHT_RECLAIM_MONTHS = 2 * 12;
 
 const NEIGHBORS = [
   [1, 0],
@@ -67,6 +69,28 @@ function isCarrot(cell: MapCell | undefined): boolean {
 
 function ripeBlighted(cell: MapCell): boolean {
   return cell.blight === true && (cell.growth ?? 0) >= 1;
+}
+
+function reclaimBlightedCrop(cell: MapCell) {
+  cell.growth = undefined;
+  delete cell.blight;
+  delete cell.blightMonths;
+  delete cell.light;
+  cell.terrain = "grass";
+}
+
+/** Age dead blighted carrots and reclaim them as grass and moss. */
+export function advanceBlightReclaim(map: MapData): number {
+  let reclaimed = 0;
+  for (const cell of map.cells) {
+    if (!cell || !ripeBlighted(cell)) continue;
+    if (cell.blightMonths === undefined) cell.blightMonths = 0;
+    else cell.blightMonths++;
+    if (cell.blightMonths < BLIGHT_RECLAIM_MONTHS) continue;
+    reclaimBlightedCrop(cell);
+    reclaimed++;
+  }
+  return reclaimed;
 }
 
 function hasRipeBlightNeighbor(map: MapData, index: number): boolean {
@@ -154,6 +178,7 @@ export function advanceCrops(map: MapData, cropCover = 1): CropAdvance {
     if (cell.moisture <= CROP_WILT_MOISTURE) {
       cell.growth = undefined;
       delete cell.blight;
+      delete cell.blightMonths;
       withered++;
       continue;
     }

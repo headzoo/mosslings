@@ -3,7 +3,7 @@ import type { Season } from "@/lib/game-time";
 import { HelpModal } from "./HelpModal";
 import { HudIcon } from "./HudIcon";
 import { SeasonSun } from "./SeasonSun";
-import { useMusic } from "./useMusic";
+import { YearClock } from "./YearClock";
 
 const SEASON_SUN: Record<Season, string> = {
   Summer: "/mosslings/icons/sun.png",
@@ -31,6 +31,7 @@ export function Year({
         <span>Year {year}</span>
         <span>{season}</span>
       </div>
+      <YearClock elapsed={elapsed} />
     </div>
   );
 }
@@ -132,6 +133,8 @@ export function PlayFast({
 export function PlayControls({
   isPlaying,
   rate,
+  muted,
+  onToggleMute,
   onToggle,
   onSkip,
   onFastForward,
@@ -140,13 +143,14 @@ export function PlayControls({
 }: {
   isPlaying: boolean;
   rate: number;
+  muted: boolean;
+  onToggleMute: () => void;
   onToggle: () => void;
   onSkip: () => void;
   onFastForward: () => void;
   onRestoreWelcome: () => void;
   onScreenshot?: () => void;
 }) {
-  const music = useMusic();
   const [helpOpen, setHelpOpen] = useState(false);
   return (
     <fieldset className="play-controls" aria-label="Playback and help">
@@ -160,7 +164,7 @@ export function PlayControls({
         <HudIcon src="/mosslings/icons/help.png" />
       </button>
       <PlayShot onScreenshot={onScreenshot} />
-      <PlayMute muted={music.muted} onToggle={music.toggleMuted} />
+      <PlayMute muted={muted} onToggle={onToggleMute} />
       <PlayPause isPlaying={isPlaying} onToggle={onToggle} />
       <PlaySkip onSkip={onSkip} />
       <PlayFast rate={rate} onFastForward={onFastForward} />

@@ -73,7 +73,7 @@ export interface PreviewMossling {
   ritual?: MatingRitual;
   /** Set while a pair walks in or plays soccer or chase. */
   soccer?: SoccerGame;
-  /** Game seconds when they last survived lightning, meteor, tornado, quake, or fire. */
+  /** Game seconds when they last survived lightning, meteor, tornado, nuke, or fire. */
   cursedAt?: number;
 }
 

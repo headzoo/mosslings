@@ -5,7 +5,7 @@ import { FRAME_COUNT, SPRITE_SIZE } from "@/lib/mossling-detail";
 import { HudIcon } from "./HudIcon";
 
 const CARROT_SRC = "/mosslings/icons/carrot.png";
-/** One pass of four bites. Loops while the supply is falling. */
+/** One pass of four bites, from the leaves down to the tip. Loops while the supply is falling. */
 const BITE_SECONDS = 0.7;
 /**
  * Food is published in steps, so a decline can sit still between ticks.
@@ -13,19 +13,14 @@ const BITE_SECONDS = 0.7;
  */
 const DROP_HOLD_SECONDS = 1.2;
 
-type Bite = { x: number; y: number; rx: number; ry: number };
+/** A scoop taken from the top. Everything above the shoulder is gone. */
+type Bite = { shoulder: number; reach: number; rx: number; cx: number };
 
-const BITES: readonly (readonly Bite[])[] = [
-  [{ x: 21, y: 16, rx: 2.4, ry: 2 }],
-  [{ x: 20, y: 17, rx: 4.2, ry: 3.4 }],
-  [
-    { x: 20, y: 16, rx: 4.6, ry: 3.6 },
-    { x: 13, y: 22, rx: 3.2, ry: 2.6 },
-  ],
-  [
-    { x: 18, y: 18, rx: 6.2, ry: 4.4 },
-    { x: 14, y: 24, rx: 3.8, ry: 3 },
-  ],
+const BITES: readonly Bite[] = [
+  { shoulder: 6.5, reach: 3.6, rx: 11, cx: 15.5 },
+  { shoulder: 13.2, reach: 3.6, rx: 8.6, cx: 16 },
+  { shoulder: 18.6, reach: 4.1, rx: 6.8, cx: 16 },
+  { shoulder: 24.6, reach: 2.2, rx: 5.5, cx: 16 },
 ];
 
 function useCarrotFalling(value: number | null, elapsed: () => number) {
@@ -64,16 +59,24 @@ function useCarrotFalling(value: number | null, elapsed: () => number) {
   return falling;
 }
 
-function punchBites(context: CanvasRenderingContext2D, bites: readonly Bite[]) {
-  context.save();
-  context.globalCompositeOperation = "destination-out";
-  context.fillStyle = "#000";
-  for (const bite of bites) {
-    context.beginPath();
-    context.ellipse(bite.x, bite.y, bite.rx, bite.ry, -0.5, 0, Math.PI * 2);
-    context.fill();
+function biteCovers(bite: Bite, x: number, y: number) {
+  const py = y + 0.5;
+  if (py < bite.shoulder) return true;
+  const dx = (x + 0.5 - bite.cx) / bite.rx;
+  const dy = (py - bite.shoulder) / bite.reach;
+  return dx * dx + dy * dy <= 1;
+}
+
+function punchBite(context: CanvasRenderingContext2D, bite: Bite) {
+  const image = context.getImageData(0, 0, SPRITE_SIZE, SPRITE_SIZE);
+  const pixels = image.data;
+  for (let y = 0; y < SPRITE_SIZE; y++) {
+    for (let x = 0; x < SPRITE_SIZE; x++) {
+      if (!biteCovers(bite, x, y)) continue;
+      pixels[(y * SPRITE_SIZE + x) * 4 + 3] = 0;
+    }
   }
-  context.restore();
+  context.putImageData(image, 0, 0);
 }
 
 function buildBiteSheet(image: CanvasImageSource) {
@@ -92,7 +95,8 @@ function buildBiteSheet(image: CanvasImageSource) {
   for (let frame = 0; frame < FRAME_COUNT; frame++) {
     frameContext.clearRect(0, 0, SPRITE_SIZE, SPRITE_SIZE);
     frameContext.drawImage(image, 0, 0, SPRITE_SIZE, SPRITE_SIZE);
-    punchBites(frameContext, BITES[frame] ?? []);
+    const bite = BITES[frame];
+    if (bite) punchBite(frameContext, bite);
     sprite.drawImage(frameCanvas, 0, frame * SPRITE_SIZE);
   }
   return canvas;

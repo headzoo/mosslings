@@ -20,7 +20,7 @@ The world remains in memory for the page session; reloading creates a new world.
 - Trees: one empty grass/dirt tile; persistent tree with health.
 - Fire: spreads at most 6 tiles from placement on wet ground, and out to 10 tiles through brown trees, grass, and moss. Burns out within 10 seconds.
 - Tornado: 4-tile radius, wanders for 12 seconds; damage and collision-safe movement.
-- Quake: faults and a shockwave up to 50 tiles away, lasting 4 seconds.
+- Nuke: 0.7-second missile approach, then a 25-tile crater and a mushroom cloud that fades by 4 seconds.
 - Lightning: immediate localized damage and scorching; a 0.9-second bolt.
 - Meteor: 0.7-second approach, impact damage and a 6-tile crater; debris fades by 2.8 seconds.
 
@@ -32,7 +32,7 @@ seconds at 0.4 intensity, so it cannot refill a field the way a 6-second god
 rain can. Lightning
 strikes under a rain cloud about one tenth of each second it is falling, for
 god rain as well as wild showers. About
-once every six years one of fire, tornado, quake, lightning, or meteor starts
+once every six years one of fire, tornado, nuke, lightning, or meteor starts
 on its own. Disease stays a player power.
 
 Rain on ground that is already soaked builds flood pressure and fades when the
@@ -54,10 +54,10 @@ toward danger.
 
 `avoidance.ts` handles disaster flight on the same game clock as the hazards.
 Each destructive action exposes its current threat footprint: actual burning
-cells, the moving tornado, the approaching meteor's impact area, the quake area
-for organisms not yet hit, and the brief lightning flash. Rain and building
-powers do not trigger panic. Lightning still hits immediately; survivors react
-afterward. Meteors have a short approach period during which flight is possible.
+cells, the moving tornado, the approaching meteor and nuke impact areas, and
+the brief lightning flash. Rain and building powers do not trigger panic.
+Lightning still hits immediately; survivors react afterward. Meteors and nukes
+have a short approach period during which flight is possible.
 
 The inspector's stable genetic traits drive the response:
 - Speed sets running pace (1.5–6 tiles per game second at trait extremes).

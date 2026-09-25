@@ -3,9 +3,6 @@ import test from "node:test";
 import { provisionCrops } from "../lib/crops";
 import { MONTH_SECONDS, YEAR_SECONDS } from "../lib/game-time";
 import {
-  sampleFromResources,
-} from "../lib/resource-history";
-import {
   FOREST_SPREAD_MOISTURE,
   FOREST_SPREAD_SECONDS,
   plantStarterForests,
@@ -14,6 +11,7 @@ import {
 import { GodWorld } from "../lib/god/engine";
 import type { MapData } from "../lib/map";
 import type { PreviewMossling } from "../lib/map-preview";
+import { sampleFromResources } from "../lib/resource-history";
 import { countWorldResources } from "../lib/world-resources";
 
 function fixture(width = 15, height = 15): MapData {
@@ -277,7 +275,7 @@ test("all destructive powers repair their damage on the game calendar", () => {
   for (const power of [
     "fire",
     "tornado",
-    "quake",
+    "nuke",
     "lightning",
     "meteor",
   ] as const) {

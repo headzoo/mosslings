@@ -9,7 +9,7 @@ export type PowerId =
   | "disease"
   | "fire"
   | "tornado"
-  | "quake"
+  | "nuke"
   | "lightning"
   | "meteor";
 export type DamageKind = "heat" | "impact" | "water";

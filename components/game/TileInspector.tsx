@@ -52,7 +52,7 @@ const cropInfo = {
 const deadCropInfo = {
   title: "Dead carrots",
   description:
-    "A blight took these carrots when they ripened. The rows are dead and feed no one. The sickness spreads into the carrot tiles beside them.",
+    "A blight took these carrots when they ripened. The rows are dead and feed no one. The sickness spreads into the carrot tiles beside them. In about two years, grass and moss will grow back.",
 };
 export function TileInspector({
   seed,

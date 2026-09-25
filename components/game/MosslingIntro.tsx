@@ -7,7 +7,13 @@ import {
   useState,
 } from "react";
 
-export type IntroPhase = "mosslings" | "species" | "map" | "powers" | "world";
+export type IntroPhase =
+  | "mosslings"
+  | "click"
+  | "species"
+  | "map"
+  | "powers"
+  | "world";
 
 export type IntroSpotlight = {
   x: number;
@@ -107,8 +113,9 @@ export function MosslingIntro({
   );
   const hole = highlightRect ? highlightHole(highlightRect) : null;
 
+  const spotlightPhase = phase === "mosslings" || phase === "click";
   const style =
-    phase === "mosslings" && spotlight
+    spotlightPhase && spotlight
       ? ({
           "--lens-x": `${spotlight.x}px`,
           "--lens-y": `${spotlight.y}px`,
@@ -134,7 +141,7 @@ export function MosslingIntro({
       style={style}
       aria-labelledby={`mossling-intro-${phase}-title`}
     >
-      {phase === "mosslings" && (
+      {spotlightPhase && (
         <div className="mossling-intro-dim" aria-hidden="true" />
       )}
       {highlightActive && hole && <DimPanels hole={hole} />}
@@ -146,6 +153,15 @@ export function MosslingIntro({
               These colorful circles are your Mosslings. Genetics give each one
               its own look. Watch them wander, find mates, and take care of
               them.
+            </p>
+          </>
+        )}
+        {phase === "click" && (
+          <>
+            <h2 id="mossling-intro-click-title">Click them.</h2>
+            <p>
+              Click a Mossling to see more about it: who it is, and the ground
+              it stands on. Close the panel, then click another.
             </p>
           </>
         )}
@@ -162,8 +178,8 @@ export function MosslingIntro({
           <>
             <h2 id="mossling-intro-powers-title">These are your god powers.</h2>
             <p>
-              Pick a power, then click the map. Rain, sun, and carrots help
-              your Mosslings; fire and disasters test them. Esc cancels.
+              Pick a power, then click the map. Rain, sun, and carrots help your
+              Mosslings; fire and disasters test them. Esc cancels.
             </p>
           </>
         )}

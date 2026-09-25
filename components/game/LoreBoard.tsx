@@ -12,7 +12,7 @@ export const NEWS_MS = 8_000;
 export type DisasterKind =
   | "fire"
   | "tornado"
-  | "quake"
+  | "nuke"
   | "lightning"
   | "meteor"
   | "blight";
@@ -57,11 +57,11 @@ const newsItems: Record<
     line: (region) =>
       `A twister is loose in ${region}. Some Mosslings may have been carried off.`,
   },
-  quake: {
+  nuke: {
     image: "/mosslings/lore/news/quake.png",
-    alt: "A startled moss creature sits beside a crack in the ground.",
+    alt: "A moss creature watches a mushroom cloud rise over the land.",
     line: (region) =>
-      `The ground is splitting in ${region}. Some Mosslings may have been lost.`,
+      `A nuke falls in ${region}. Some Mosslings may have been lost.`,
   },
   lightning: {
     image: "/mosslings/lore/news/lightning.png",

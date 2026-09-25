@@ -3,7 +3,7 @@ import { disease } from "./disease";
 import { fire } from "./fire";
 import { lightning } from "./lightning";
 import { meteor } from "./meteor";
-import { quake } from "./quake";
+import { nuke } from "./nuke";
 import { rain } from "./rain";
 import { raze } from "./raze";
 import { sun } from "./sun";
@@ -16,7 +16,7 @@ export const GOD_ACTIONS: Record<PowerId, GodAction> = {
   disease,
   fire,
   tornado,
-  quake,
+  nuke,
   lightning,
   meteor,
 };
